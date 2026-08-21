@@ -54,6 +54,16 @@
   FX.campUpActive = function () { return campUpT > 0; };
   FX.campUpTime = function () { return campUpT; };
 
+  // V1.5: 采集动画效果（1.5秒，包含抖动 + 光效 + 屏幕闪烁）
+  var gatherAnimT = 0;
+  var gatherAnimCb = null;
+  FX.gatherAnim = function (cb) {
+    gatherAnimT = 1.5; // 1.5秒动画
+    gatherAnimCb = cb;
+  };
+  FX.gatherAnimActive = function () { return gatherAnimT > 0; };
+  FX.gatherAnimTime = function () { return gatherAnimT; };
+
   // ---- 每帧更新 ----
   FX.update = function (dt) {
     var i;
@@ -83,6 +93,15 @@
       }
     }
     if (campUpT > 0) campUpT -= dt;
+    // V1.5: 采集动画更新
+    if (gatherAnimT > 0) {
+      gatherAnimT -= dt;
+      if (gatherAnimT <= 0 && gatherAnimCb) {
+        var cb = gatherAnimCb;
+        gatherAnimCb = null;
+        if (cb) cb();
+      }
+    }
   };
 
   // ---- 绘制覆盖层（在场景绘制之后调用）----
@@ -168,6 +187,33 @@
       ctx.font = '13px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.8)';
       ctx.fillText(d.sub, W / 2, H * 0.52 + 34);
+      ctx.globalAlpha = 1;
+    }
+
+    // V1.5: 采集动画效果（闪光 + 挖掘动作 + 采集中提示）
+    if (gatherAnimT > 0) {
+      var prog = 1 - gatherAnimT / 1.5;
+      // 中心闪光（开场更亮，逐渐淡出）
+      if (prog < 0.5) {
+        var flashAlpha = 1 - prog / 0.5;
+        var gradient = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6);
+        gradient.addColorStop(0, 'rgba(255,225,160,' + (flashAlpha * 0.45) + ')');
+        gradient.addColorStop(1, 'rgba(255,225,160,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, W, H);
+      }
+      // 挖掘动作：采集按钮上方一个上下跳动的锄头 emoji，模拟刨挖
+      var bob = Math.abs(Math.sin(prog * Math.PI * 5)) * 18;
+      ctx.font = '34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u26CF\uFE0F', W / 2, H - 150 - bob);
+      // 采集中... 提示（全程显示，结尾淡出）
+      var tipA = prog > 0.8 ? (1 - (prog - 0.8) / 0.2) : 1;
+      ctx.globalAlpha = tipA;
+      ctx.font = 'bold 17px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillText('\u91C6\u96C6\u4E2D...', W / 2, H * 0.42);
       ctx.globalAlpha = 1;
     }
   };

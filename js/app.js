@@ -260,50 +260,75 @@
       p[0] = Math.max(0.1, p[0] - 0.05);
     }
     var r = Math.random();
-    if (r < p[0]) return D.L1[Math.floor(Math.random() * 3)]; // L1
-    else if (r < p[0] + p[1]) return D.L2_BONUS[Math.floor(Math.random() * 3)]; // L2
-    else return 3; // 木架（L3）
+    // V1.5: 额外概率获得概率食物（椰子等）：挖到直接恢复体力，概率稍低
+    if (r < 0.1) {
+      return { type: 'food', id: 11 }; // 椰子
+    }
+    r = (r - 0.1) / 0.9; // 重新映射剩余概率（成功路径内）
+    if (r < p[0]) return { type: 'item', id: D.L1[Math.floor(Math.random() * 3)] }; // L1
+    else if (r < p[0] + p[1]) return { type: 'item', id: D.L2_BONUS[Math.floor(Math.random() * 3)] }; // L2
+    else return { type: 'item', id: 3 }; // 木架（L3）
   }
-  function gather() {
-    // V1.1: 风暴天禁止采集
+  // V1.5: 计算本次采集空手率（受天气 / 版本影响）
+  function computeMissRate() {
     var wInfo = getWeatherInfo();
-    if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
-    // V1.2: 饱食度影响体力上限
-    var effectiveMaxEnergy = S.food > 0 ? S.maxEnergy : Math.floor(S.maxEnergy * 0.5);
-    if (S.energy <= 0) { Game.FX.toast('体力不足，看广告恢复'); return; }
-    var pos = firstEmpty();
-    if (pos < 0) { emptyLine('full'); return; } // 棋盘满
-    // V1.1: 晴天惊喜体力 +1
-    var energyCost = 1;
-    if (S._sunnyGift) { energyCost = 0; S._sunnyGift = false; }
-    S.energy -= energyCost;
-    // V1.1: 晴天使采集产出概率提升
-    var actualMissRate = D.MISS_RATE;
-    if (wInfo.gatherBoost > 1) {
-      // 采集产出加成：减少空手概率
-      actualMissRate = D.MISS_RATE / wInfo.gatherBoost;
-    }
-    // V1.2: 采集成功率从 75% 提升到 80%（减少 5% 空手率）
-    actualMissRate = Math.max(0.15, actualMissRate - 0.05);
-    if (Math.random() < actualMissRate) {
-      // 空手：体力照扣 + 趣味文案 + 💢 提示
-      emptyLine('miss');
-      var gb = getGatherBtnRect();
-      Game.FX.floaty('\uD83D\uDCA2', gb.x + gb.w / 2, gb.y - 10);
-      save();
-      return;
-    }
-    // V1.5: 根据工具等级和天气获取物品
-    var id = getRandomItemByLevel();
-    S.board[pos] = id;
+    var rate = D.MISS_RATE;
+    if (wInfo.gatherBoost > 1) rate = D.MISS_RATE / wInfo.gatherBoost; // 晴天降低空手率
+    return Math.max(0.15, rate - 0.05); // V1.2: 整体 -5% 空手
+  }
+  // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
+  function processGatherResult(pos) {
     var cellRect = getCellRect(pos);
-    var toolLevel = getGatherLevel();
-    var bonus = (wInfo.gatherBoost > 1 || toolLevel > 1) ? (' Lv' + toolLevel) : '';
-    Game.FX.floaty('\uD83C\uDFA3' + D.ITEMS[id].em + bonus, cellRect.x + cellRect.w / 2, cellRect.y - 8);
+    var cx = cellRect.x + cellRect.w / 2;
+    var cy = cellRect.y - 8;
+    var result = getRandomItemByLevel();
+    if (result.type === 'food') {
+      // 椰子等概率食物：挖到直接恢复 1-2 点体力（概率较低）
+      var gain = Math.floor(Math.random() * 2) + 1;
+      S.energy = Math.min(S.maxEnergy, S.energy + gain);
+      S.board[pos] = result.id; // 同时作为食物留在棋盘
+      Game.FX.floaty('\uD83E\uDD65 +' + gain + '体力', cx, cy);
+      Game.FX.toast('发现椰果！体力 +' + gain);
+    } else {
+      S.board[pos] = result.id;
+      var toolLevel = getGatherLevel();
+      var wInfo = getWeatherInfo();
+      var bonus = (wInfo.gatherBoost > 1 || toolLevel > 1) ? (' Lv' + toolLevel) : '';
+      Game.FX.floaty('\uD83C\uDFA3' + D.ITEMS[result.id].em + bonus, cx, cy);
+    }
     // 采集物入格小弹跳
     if (!mergeAnim[pos]) mergeAnim[pos] = 0.35;
     setTimeout(function () { autoMerge(); }, 120);
     save();
+  }
+  function gather() {
+    // V1.5: 动画进行中禁止重复触发，避免能量被多次扣除
+    if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return;
+    // V1.1: 风暴天禁止采集
+    var wInfo = getWeatherInfo();
+    if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
+    if (S.energy <= 0) { Game.FX.toast('体力不足，看广告恢复'); return; }
+    var pos = firstEmpty();
+    if (pos < 0) { emptyLine('full'); return; } // 棋盘满
+    // 扣体力（晴天惊喜可免）
+    var energyCost = S._sunnyGift ? 0 : 1;
+    S._sunnyGift = false;
+    S.energy -= energyCost;
+    save();
+    // 预判定空手率，但动画期间不揭晓，结束后再给反馈（更有「挖掘」代入感）
+    var isMiss = Math.random() < computeMissRate();
+    // V1.5: 触发采集动画（1.5s 挖掘过程），结束后落地结果
+    Game.FX.gatherAnim(function () {
+      if (isMiss) {
+        // 空手：体力照扣 + 趣味文案 + 💢 提示
+        emptyLine('miss');
+        var gb = getGatherBtnRect();
+        Game.FX.floaty('\uD83D\uDCA2', gb.x + gb.w / 2, gb.y - 10);
+      } else {
+        processGatherResult(pos);
+      }
+      save();
+    });
   }
 
   // ============ 自动合并（3合1 连锁 + pop 弹跳 + 粒子） ============

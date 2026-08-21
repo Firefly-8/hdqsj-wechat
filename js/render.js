@@ -419,9 +419,12 @@
     var fInfo = Game.App.getFoodInfo ? Game.App.getFoodInfo() : null;
     var effectiveMax = fInfo ? fInfo.effectiveMaxEnergy : S.maxEnergy;
     var gLabel = '\uD83C\uDFA3 采集 ' + S.energy + '/' + effectiveMax;
+    // V1.5: 采集动画进行中，按钮显示「采集中...」并隐藏倒计时
+    var animating = Game.FX.gatherAnimActive && Game.FX.gatherAnimActive();
+    if (animating) gLabel = '\uD83C\uDFA3 采集中...';
     // 体力倒计时（对应 #energyTimer）
     var timerTxt = Game.App.energyTimerText();
-    if (timerTxt) gLabel += ' ' + timerTxt;
+    if (timerTxt && !animating) gLabel += ' ' + timerTxt;
     btn(ctx, 10, ay, gatherW, 42, gLabel, C.fire, '#FFFFFF', gatherActive, pressed === 'gather', 10, 13);
     hit(10, ay, gatherW, 42, function () { Game.App.gather(); });
     btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83E\uDEB0 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
