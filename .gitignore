@@ -1,0 +1,4 @@
+# WeChat mini game
+node_modules/
+*.log
+.DS_Store
