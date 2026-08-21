@@ -495,17 +495,42 @@
     var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 48 : 36;
     var y = startY;
 
-    // 遍历所有科技树节点，以列表形式展示
+    // 遍历所有科技树节点，以列表形式展示（V1.6: 支持滚动）
     var trees = Game.DATA.TECH_TREES;
+
+    // 预计算内容总高度，用于裁剪与滚动范围
+    var contentTop = startY;
+    var bottom = H - 34;
+    var preY = contentTop;
+    for (var pt = 0; pt < trees.length; pt++) {
+      preY += 24;
+      for (var pn = 0; pn < trees[pt].nodes.length; pn++) {
+        var pdone = S.stages.indexOf(trees[pt].nodes[pn].id) >= 0;
+        preY += (pdone ? 58 : 88) + 8;
+      }
+      preY += 8;
+    }
+    var campMaxScroll = Math.max(0, preY - bottom);
+    Game.campMaxScroll = campMaxScroll;
+    Game.campScrollY = Math.max(0, Math.min(campMaxScroll, Game.campScrollY || 0));
+
+    // 裁剪内容区，按 campScrollY 偏移绘制
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, contentTop, W, bottom - contentTop);
+    ctx.clip();
+
+    var y = contentTop;
     for (var t = 0; t < trees.length; t++) {
       var tree = trees[t];
       var isLocked = S.lockedTrees && S.lockedTrees.indexOf(tree.id) >= 0;
 
       // 分支标题
+      var ty = y - Game.campScrollY;
       ctx.fillStyle = isLocked ? '#FF6B6B' : C.wood;
       ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(tree.em + ' ' + tree.name + (isLocked ? ' \uD83D\uDD12' : ''), 16, y + 14);
+      ctx.fillText(tree.em + ' ' + tree.name + (isLocked ? ' \uD83D\uDD12' : ''), 16, ty + 14);
       y += 24;
 
       for (var n = 0; n < tree.nodes.length; n++) {
@@ -516,33 +541,34 @@
         var can = prevDone && !done && !branchLocked;
 
         var cardH = done ? 58 : 88;
+        var oy = y - Game.campScrollY;
         // 卡片背景
         ctx.fillStyle = done ? C.doneBg : (branchLocked ? C.lockedBg : (prevDone ? C.paper : C.lockedBg));
-        roundRect(ctx, 10, y, W - 20, cardH, 8);
+        roundRect(ctx, 10, oy, W - 20, cardH, 8);
         ctx.fill();
         ctx.strokeStyle = done ? C.leaf : (branchLocked ? '#FF6B6B' : (prevDone ? C.wood : C.lockedBorder));
         ctx.lineWidth = 1.5;
-        roundRect(ctx, 10, y, W - 20, cardH, 8);
+        roundRect(ctx, 10, oy, W - 20, cardH, 8);
         ctx.stroke();
 
         // 节点名称
         ctx.fillStyle = done ? C.ink : (branchLocked ? '#FF6B6B' : (prevDone ? C.ink : C.lockedText));
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(node.em + ' ' + node.name, 20, y + 16);
+        ctx.fillText(node.em + ' ' + node.name, 20, oy + 16);
 
         // 状态标签
         ctx.textAlign = 'right';
         ctx.font = '10px sans-serif';
         if (done) {
           ctx.fillStyle = C.leaf;
-          ctx.fillText('\u2705 已建成', W - 20, y + 16);
+          ctx.fillText('\u2705 已建成', W - 20, oy + 16);
         } else if (branchLocked) {
           ctx.fillStyle = '#FF6B6B';
-          ctx.fillText('\uD83D\uDD12 已封锁', W - 20, y + 16);
+          ctx.fillText('\uD83D\uDD12 已封锁', W - 20, oy + 16);
         } else if (!prevDone) {
           ctx.fillStyle = C.lockedText;
-          ctx.fillText('\uD83D\uDD12 前置未完成', W - 20, y + 16);
+          ctx.fillText('\uD83D\uDD12 前置未完成', W - 20, oy + 16);
         }
 
         if (!done && !branchLocked) {
@@ -550,7 +576,7 @@
           ctx.textAlign = 'left';
           ctx.fillStyle = C.wood;
           ctx.font = '10px sans-serif';
-          ctx.fillText('效果：' + node.desc, 20, y + 34);
+          ctx.fillText('效果：' + node.desc, 20, oy + 34);
 
           // 资源需求
           var nx = 20;
@@ -563,29 +589,43 @@
             var label = Game.DATA.ITEMS[id].em + have + '/' + need;
             var pw = ctx.measureText(label).width + 10;
             ctx.fillStyle = ok ? C.okGreen : C.paper2;
-            roundRect(ctx, nx, y + 42, pw, 16, 4);
+            roundRect(ctx, nx, oy + 42, pw, 16, 4);
             ctx.fill();
             ctx.fillStyle = C.ink;
             ctx.font = '9px sans-serif';
-            ctx.fillText(label, nx + 4, y + 53);
+            ctx.fillText(label, nx + 4, oy + 53);
             nx += pw + 4;
           }
 
           // 建造按钮
           var bBtnW = 70, bBtnH = 22;
-          btn(ctx, W - 20 - bBtnW, y + cardH - 28, bBtnW, bBtnH, can ? '建造' : '不足', C.leaf, '#FFFFFF', hasAllRes && can, pressed === 'build' + node.id, 6, 10);
-          hit(W - 20 - bBtnW, y + cardH - 28, bBtnW, bBtnH, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
+          btn(ctx, W - 20 - bBtnW, oy + cardH - 28, bBtnW, bBtnH, can ? '建造' : '不足', C.leaf, '#FFFFFF', hasAllRes && can, pressed === 'build' + node.id, 6, 10);
+          hit(W - 20 - bBtnW, oy + cardH - 28, bBtnW, bBtnH, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
         } else if (done) {
           // 效果描述
           ctx.textAlign = 'left';
           ctx.fillStyle = C.ink;
           ctx.font = '10px sans-serif';
-          ctx.fillText('效果：' + node.desc, 20, y + 38);
+          ctx.fillText('效果：' + node.desc, 20, oy + 38);
         }
 
         y += cardH + 8;
       }
       y += 8;
+    }
+    ctx.restore();
+
+    // 右侧滚动条
+    if (campMaxScroll > 0) {
+      var trackX = W - 4, trackW = 3, trackY = contentTop, trackH = bottom - contentTop;
+      var thumbH = Math.max(22, trackH * (trackH / (trackH + campMaxScroll)));
+      var ratio = Game.campScrollY / campMaxScroll;
+      var thumbY = trackY + ratio * (trackH - thumbH);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(trackX, trackY, trackW, trackH);
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      roundRect(ctx, trackX, thumbY, trackW, thumbH, 2);
+      ctx.fill();
     }
 
     // 底部导航

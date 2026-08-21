@@ -58,7 +58,7 @@
     var today = new Date().toDateString();
     if (S.bottleDate !== today) {
       S.bottleDate = today;
-      S.bottle = D.DAILY_BOTTLE;
+      S.bottle = D.DAILY_BOTTLE + (S.bottleBonus ? 1 : 0); // V1.6: 海图解锁后每日 +1
     }
   }
   // V1.1: 每日天气刷新
@@ -274,7 +274,8 @@
     var wInfo = getWeatherInfo();
     var rate = D.MISS_RATE;
     if (wInfo.gatherBoost > 1) rate = D.MISS_RATE / wInfo.gatherBoost; // 晴天降低空手率
-    return Math.max(0.15, rate - 0.05); // V1.2: 整体 -5% 空手
+    if (S.gatherBonus) rate *= 0.8; // V1.6: 陷阱解锁后空手率再降 20%
+    return Math.max(0.12, rate - 0.05); // V1.2: 整体 -5% 空手
   }
   // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
   function processGatherResult(pos) {
@@ -394,10 +395,25 @@
       }
     }
     S.stages.push(stId);
-    // 处理各类解锁效果
+    // 处理各类解锁效果（V1.6 扩展：space2/energy/foodcap/offline/gather/bottle/craft）
     if (st.unlocks === 'space') {
       S.space += 10;
       S.board = S.board.concat(new Array(10).fill(0));
+    } else if (st.unlocks === 'space2') {
+      S.space += 6;
+      S.board = S.board.concat(new Array(6).fill(0));
+    } else if (st.unlocks === 'energy') {
+      S.maxEnergy += 3; S.energy += 3;
+    } else if (st.unlocks === 'foodcap') {
+      S.maxFood += 5; S.food += 5;
+    } else if (st.unlocks === 'offline') {
+      S.offlineUnlocked = true; // V1.6: 修正原 indexOf(1) 的判定错误
+    } else if (st.unlocks === 'gather') {
+      S.gatherBonus = true;
+    } else if (st.unlocks === 'bottle') {
+      S.bottleBonus = true;
+    } else if (st.unlocks === 'craft') {
+      S.craftBonus = true;
     }
     // V1.3: 检查是否触发结局
     if (st.unlocks && st.unlocks.indexOf('end_') === 0) {
@@ -442,8 +458,8 @@
       return;
     }
     S.board[pos] = 14; // 烤肉
-    // 增加饱食度
-    S.food = Math.min(S.maxFood, S.food + 3);
+    // 增加饱食度（V1.6: 工坊解锁后额外 +1）
+    S.food = Math.min(S.maxFood, S.food + (S.craftBonus ? 4 : 3));
     Game.FX.toast('\uD83D\uDD25 烹饪成功！烤肉 +3 饱食');
     save();
   }
@@ -563,7 +579,7 @@
 
   // ============ 离线收益 ============
   function calcOffline() {
-    if (S.stages.indexOf(1) < 0) { S._offlineReward = 0; return; }
+    if (!S.offlineUnlocked) { S._offlineReward = 0; return; }
     var mins = Math.floor(S._offlineSec / 60);
     var cap = 30;
     S._offlineReward = Math.min(mins, cap);
@@ -722,6 +738,7 @@
   var pendingHit = null;
   var scrollTouchStartY = null;
   var scrollTouchStartScrollY = null;
+  var campScrollMoved = false;
 
   function touchPos(e) {
     var t = e.touches && e.touches[0];
@@ -754,12 +771,19 @@
     }
     // 棋盘面板区域（4列滚动）检测滑动
     var py = 148, ph = H - 148 - 118;
+    var inScroll = false;
     if (Game.scene === 'game' && Game.tab === 'board' && p.x >= 10 && p.x <= W - 10 && p.y >= py && p.y <= py + ph) {
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.boardScrollY || 0;
-    } else {
-      scrollTouchStartY = null;
+      inScroll = true;
+    } else if (Game.scene === 'game' && Game.tab === 'camp' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
+      // V1.6: 建造页滚动检测
+      scrollTouchStartY = p.y;
+      scrollTouchStartScrollY = Game.campScrollY || 0;
+      campScrollMoved = false;
+      inScroll = true;
     }
+    if (!inScroll) scrollTouchStartY = null;
     // 正常场景：逆序命中（上层优先）
     for (var j = Game.hits.length - 1; j >= 0; j--) {
       var hj = Game.hits[j];
@@ -773,10 +797,21 @@
     pressedRect = null;
   }
   function onTouchEnd(e) {
-    // 处理棋盘滚动
+    // 处理滚动手势：建造页需区分点击与滑动，棋盘页沿用原逻辑
     if (scrollTouchStartY !== null) {
+      var wasCamp = (Game.scene === 'game' && Game.tab === 'camp');
       scrollTouchStartY = null;
-      return;
+      if (wasCamp) {
+        if (!campScrollMoved && pendingHit) {
+          var cb = pendingHit.cb;
+          pendingHit = null;
+          pressedRect = null;
+          if (cb) cb();
+        }
+        campScrollMoved = false;
+        return;
+      }
+      return; // 棋盘：拖动不触发点击
     }
     if (pendingHit) {
       var cb = pendingHit.cb;
@@ -787,21 +822,30 @@
       pressedRect = null;
     }
   }
-  // 触摸移动：处理棋盘滚动
+  // 触摸移动：处理棋盘 / 建造页滚动
   function onTouchMove(e) {
-    if (scrollTouchStartY === null || Game.scene !== 'game' || Game.tab !== 'board') return;
+    if (scrollTouchStartY === null || Game.scene !== 'game') return;
     var p = touchPos(e);
     if (!p) return;
-    var dy = scrollTouchStartY - p.y; // 手指上滑为正
-    var scrollDelta = dy * 1.5; // 滚动系数
-    var newScrollY = scrollTouchStartScrollY + scrollDelta;
-    // 计算最大滚动值
-    var cols = 4, cellGap = 12, bh2 = 52;
-    var totalRows = Math.ceil(S.space / cols);
-    var visibleRows = Math.floor((H - 148 - 118 - 26) / (bh2 + cellGap));
-    var maxScroll = Math.max(0, totalRows * (bh2 + cellGap) - (H - 148 - 118 - 26));
-    newScrollY = Math.max(0, Math.min(maxScroll, newScrollY));
-    Game.boardScrollY = newScrollY;
+    if (Game.tab === 'board') {
+      var dy = scrollTouchStartY - p.y; // 手指上滑为正
+      var scrollDelta = dy * 1.5; // 滚动系数
+      var newScrollY = scrollTouchStartScrollY + scrollDelta;
+      // 计算最大滚动值
+      var cols = 4, cellGap = 12, bh2 = 52;
+      var totalRows = Math.ceil(S.space / cols);
+      var maxScroll = Math.max(0, totalRows * (bh2 + cellGap) - (H - 148 - 118 - 26));
+      newScrollY = Math.max(0, Math.min(maxScroll, newScrollY));
+      Game.boardScrollY = newScrollY;
+    } else if (Game.tab === 'camp') {
+      // V1.6: 建造页滚动（区分点击与滑动）
+      var cdy = scrollTouchStartY - p.y;
+      if (Math.abs(cdy) > 6) campScrollMoved = true;
+      var newCampY = scrollTouchStartScrollY + cdy * 1.5;
+      var cMax = Game.campMaxScroll || 0;
+      Game.campScrollY = Math.max(0, Math.min(cMax, newCampY));
+      if (campScrollMoved) pendingHit = null; // 拖动时不触发按钮
+    }
   }
   function onTouchCancel() {
     pendingHit = null;

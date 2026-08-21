@@ -43,7 +43,7 @@
     home: 'bg_home.png', cg: 'bg_cg.png', beach: 'bg_beach.png'
   };
 
-  // V1.3 科技树结构（4 分支，每分支 3 级）
+  // V1.6 科技树结构（4 分支，每分支 5 级，结局放在第 5 级，内容更丰富、通关更久）
   var TECH_TREES = [
     {
       id: 'defense',
@@ -51,8 +51,10 @@
       em: '\uD83E\uDDF1',
       nodes: [
         { id: 101, name: '栅栏围墙', em: '\uD83E\uDDF1', need: { 3: 1, 23: 1 }, desc: '防御 +10', unlocks: '', prev: 0 },
-        { id: 102, name: '箭塔', em: '\uD83D\uDDCD', need: { 3: 2, 23: 2, 14: 1 }, desc: '防御 +20', unlocks: '', prev: 101 },
-        { id: 103, name: '烽火台', em: '\uD83D\uDD25', need: { 3: 3, 23: 2, 14: 2 }, desc: '结局：部落发现', unlocks: 'end_defense', prev: 102 }
+        { id: 102, name: '木桩阵', em: '\uD83E\uDD94', need: { 3: 2, 23: 1, 1: 3 }, desc: '防御 +15', unlocks: '', prev: 101 },
+        { id: 103, name: '箭塔', em: '\uD83D\uDDCD', need: { 3: 2, 23: 2, 14: 1 }, desc: '防御 +20', unlocks: '', prev: 102 },
+        { id: 104, name: '瞭望塔', em: '\uD83D\uDC41', need: { 3: 3, 23: 2, 14: 1 }, desc: '哨塔值守，体力上限 +3', unlocks: 'energy', prev: 103 },
+        { id: 105, name: '烽火台', em: '\uD83D\uDD25', need: { 3: 3, 23: 3, 14: 2 }, desc: '结局：部落发现', unlocks: 'end_defense', prev: 104 }
       ]
     },
     {
@@ -62,7 +64,9 @@
       nodes: [
         { id: 111, name: '结绳', em: '\uD83D\uDCDD', need: { 1: 3 }, desc: '采集效率 +15%', unlocks: '', prev: 0 },
         { id: 112, name: '渔网', em: '\uD83D\uDCA1', need: { 2: 2, 1: 5 }, desc: '采集效率 +25%', unlocks: '', prev: 111 },
-        { id: 113, name: '陷阱', em: '\uD83E\uDDD8', need: { 3: 1, 2: 2, 22: 2 }, desc: '结局：捕获商船', unlocks: 'end_gather', prev: 112 }
+        { id: 113, name: '陷阱', em: '\uD83E\uDDD8', need: { 3: 1, 2: 2, 22: 2 }, desc: '采集效率 +35%，常获额外收获', unlocks: 'gather', prev: 112 },
+        { id: 114, name: '盐田', em: '\uD83C\uDFE6', need: { 2: 3, 22: 2, 14: 1 }, desc: '腌制保鲜，饱食上限 +5', unlocks: 'foodcap', prev: 113 },
+        { id: 115, name: '诱捕阵', em: '\uD83D\uDDEF', need: { 3: 2, 2: 3, 22: 2, 14: 2 }, desc: '结局：捕获商船', unlocks: 'end_gather', prev: 114 }
       ]
     },
     {
@@ -72,7 +76,9 @@
       nodes: [
         { id: 121, name: '庇护所', em: '\u26FA', need: { 2: 3 }, desc: '解锁离线收益', unlocks: 'offline', prev: 0 },
         { id: 122, name: '仓储', em: '\uD83D\uDCE6', need: { 3: 1, 22: 1 }, desc: '棋盘容量 +10', unlocks: 'space', prev: 121 },
-        { id: 123, name: '船舱', em: '\uD83D\uDEA2', need: { 3: 3, 2: 3, 14: 2 }, desc: '结局：建造船只', unlocks: 'end_build', prev: 122 }
+        { id: 123, name: '茅屋', em: '\uD83C\uDFE0', need: { 3: 2, 2: 2, 14: 1 }, desc: '棋盘容量 +6', unlocks: 'space2', prev: 122 },
+        { id: 124, name: '工坊', em: '\uD83E\uDDF0', need: { 3: 2, 22: 2 }, desc: '烹饪附带额外饱食', unlocks: 'craft', prev: 123 },
+        { id: 125, name: '船坞', em: '\uD83D\uDEA2', need: { 3: 4, 2: 3, 14: 3 }, desc: '结局：建造船只', unlocks: 'end_build', prev: 124 }
       ]
     },
     {
@@ -82,7 +88,9 @@
       nodes: [
         { id: 131, name: '风筝', em: '\uD83C\uDF88', need: { 1: 2, 2: 1 }, desc: '探索范围 +1', unlocks: '', prev: 0 },
         { id: 132, name: '信号镜', em: '\uD83D\uDCA1', need: { 2: 2, 22: 1, 14: 1 }, desc: '探索范围 +2', unlocks: '', prev: 131 },
-        { id: 133, name: '小舟', em: '\uD83D\uDEA4', need: { 3: 2, 2: 3, 14: 2 }, desc: '结局：自制木筏', unlocks: 'end_explore', prev: 132 }
+        { id: 133, name: '海图', em: '\uD83C\uDFF5', need: { 3: 1, 2: 2, 22: 1 }, desc: '绘制海图，每日漂流瓶 +1', unlocks: 'bottle', prev: 132 },
+        { id: 134, name: '独木舟', em: '\uD83D\uDEF5', need: { 3: 2, 2: 2, 14: 1 }, desc: '探索范围 +3', unlocks: '', prev: 133 },
+        { id: 135, name: '木筏', em: '\uD83D\uDEA4', need: { 3: 3, 2: 3, 14: 2 }, desc: '结局：自制木筏', unlocks: 'end_explore', prev: 134 }
       ]
     }
   ];
