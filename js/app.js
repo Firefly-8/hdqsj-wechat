@@ -688,6 +688,7 @@
   function enterGame() {
     // 进入主游戏前先显示约 1s 的加载过渡，更具真实感
     Game.scene = 'loading';
+    Game.loadStart = Date.now();
     S.entered = true;
     // 首次进入额外赠送体力（仅一次），让新用户多玩一会儿
     if (!S.welcomed) {
@@ -716,7 +717,7 @@
         // V1.1: 触发每日随机事件
         triggerDailyEvent();
       }
-    }, 1000);
+    }, 2500);
   }
   function backHome() {
     save();

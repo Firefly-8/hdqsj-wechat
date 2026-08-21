@@ -714,44 +714,93 @@
     }
   }
 
-  // ============ 加载过渡（进入游戏前的 ~1s loading） ============
+  // ============ 加载过渡（进入游戏前的漂流 loading，约 2.5s） ============
   function drawLoading(ctx, W, H, t) {
     var C = Game.DATA.C;
-    // 背景优先用海滩图，未加载完降级为海色渐变
-    if (!drawSceneBg(ctx, 'beach', W, H)) {
-      var g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, C.seaDeep);
-      g.addColorStop(1, C.sea);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-    }
-    // 半透明遮罩，提升文字可读性（WCAG 对比度）
-    ctx.fillStyle = 'rgba(6,24,42,0.45)';
+    // 天空渐变（顶部浅蓝 → 海平线）
+    var sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+    sky.addColorStop(0, '#BFE3F0');
+    sky.addColorStop(1, '#EAF5F9');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    // 海洋渐变（海平线 → 底部）
+    var sea = ctx.createLinearGradient(0, H * 0.5, 0, H);
+    sea.addColorStop(0, C.sea);
+    sea.addColorStop(1, C.seaDeep);
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, H * 0.5, W, H * 0.5);
+
+    var horizon = H * 0.52;
+    // 远景海浪（在船之后）
+    drawWave(ctx, W, H, horizon + 6, 5, 90, 1.1, 0.0, C.sea, 0.9, t);
+    drawWave(ctx, W, H, horizon + 14, 6, 70, 1.4, 1.6, C.seaDark, 0.5, t);
+
+    // 小船（随波起伏 + 随浪倾斜）
+    var bx = W / 2;
+    var by = horizon + 4 + Math.sin(t * 1.6) * 5;
+    var tilt = Math.sin(t * 1.6 + 0.4) * 0.05;
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(tilt);
+    // 船体（木色梯形）
+    ctx.fillStyle = C.wood;
+    ctx.beginPath();
+    ctx.moveTo(-28, 0); ctx.lineTo(28, 0); ctx.lineTo(19, 15); ctx.lineTo(-19, 15);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.btnShadow; ctx.lineWidth = 1.5; ctx.stroke();
+    // 桅杆
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, -36); ctx.stroke();
+    // 帆
+    ctx.fillStyle = C.paper;
+    ctx.beginPath(); ctx.moveTo(2, -34); ctx.lineTo(2, -8); ctx.lineTo(22, -20); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.paper2; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+
+    // 近景海浪（遮住船底，营造"船在海浪中"的层次）
+    drawWave(ctx, W, H, horizon + 10, 7, 60, 1.8, 3.0, C.sea, 0.85, t);
+    drawWave(ctx, W, H, horizon + 20, 6, 50, 2.2, 4.5, '#3E93B0', 0.6, t);
+
+    // 轻遮罩，提升文字可读性（不压暗海洋）
+    ctx.fillStyle = 'rgba(6,24,42,0.16)';
     ctx.fillRect(0, 0, W, H);
 
-    var cx = W / 2, cy = H / 2 - 6, r = 18;
-    // 底环
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-    // 旋转扇区（仅动画 transform/opacity 思路，此处用角度）
-    ctx.strokeStyle = C.fire;
-    ctx.lineWidth = 4;
-    var a0 = (t * 4) % (Math.PI * 2);
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, a0, a0 + Math.PI * 1.2);
-    ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
+    // 标题（轻微浮动）
+    var ty = H * 0.26 + Math.sin(t * 1.2) * 3;
+    ctx.fillStyle = C.ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('荒岛求生记', cx, cy - r - 24);
-    ctx.font = '13px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('加载中…', cx, cy + r + 20);
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillText('荒岛求生记', W / 2, ty);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = 'rgba(74,52,40,0.85)';
+    ctx.fillText('漂流中…', W / 2, ty + 30);
+
+    // 底部加载进度条（2.5s 满）
+    var p = Game.loadStart ? Math.min(1, (Date.now() - Game.loadStart) / 2500) : 0;
+    var barW = W * 0.5, barX = (W - barW) / 2, barY = H - 46;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    roundRect(ctx, barX, barY, barW, 5, 2.5); ctx.fill();
+    ctx.fillStyle = C.fire;
+    roundRect(ctx, barX, barY, barW * p, 5, 2.5); ctx.fill();
+  }
+
+  // 波浪辅助：从 baseY 起画一条正弦波并填充到屏幕底部
+  function drawWave(ctx, W, H, baseY, amp, len, speed, phase, color, alpha, t) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, baseY);
+    for (var x = 0; x <= W + 4; x += 6) {
+      var y = baseY + Math.sin(x / len + t * speed + phase) * amp;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   // ============ 场景分发 ============
