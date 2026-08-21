@@ -230,6 +230,40 @@
     var arr = kind === 'full' ? D.FULL_LINES : D.MISS_LINES;
     Game.FX.toast(arr[Math.floor(Math.random() * arr.length)], kind === 'miss' ? 2400 : 1600);
   }
+  // V1.5: 获取当前采集工具等级（基于已建造的科技节点）
+  function getGatherLevel() {
+    var level = 1;
+    // 采集分支：结绳(111) → 渔网(112) → 陷阱(113)
+    if (S.stages.indexOf(113) >= 0) level = 4;
+    else if (S.stages.indexOf(112) >= 0) level = 3;
+    else if (S.stages.indexOf(111) >= 0) level = 2;
+    return level;
+  }
+  // V1.5: 根据工具等级和天气计算物品等级概率
+  function getRandomItemByLevel() {
+    var wInfo = getWeatherInfo();
+    var level = getGatherLevel();
+    // 基础概率：Lv1=70% Lv1, 25% Lv2, 5% Lv3
+    // Lv2: 40% Lv1, 45% Lv2, 15% Lv3
+    // Lv3: 20% Lv1, 50% Lv2, 30% Lv3
+    // Lv4: 10% Lv1, 40% Lv2, 50% Lv3
+    var probs = {
+      1: [0.70, 0.25, 0.05],
+      2: [0.40, 0.45, 0.15],
+      3: [0.20, 0.50, 0.30],
+      4: [0.10, 0.40, 0.50]
+    };
+    var p = probs[level] || probs[1];
+    // 天气加成：晴天额外 +5% 高品质
+    if (wInfo && wInfo.gatherBoost > 1) {
+      p[2] = Math.min(0.5, p[2] + 0.05);
+      p[0] = Math.max(0.1, p[0] - 0.05);
+    }
+    var r = Math.random();
+    if (r < p[0]) return D.L1[Math.floor(Math.random() * 3)]; // L1
+    else if (r < p[0] + p[1]) return D.L2_BONUS[Math.floor(Math.random() * 3)]; // L2
+    else return 3; // 木架（L3）
+  }
   function gather() {
     // V1.1: 风暴天禁止采集
     var wInfo = getWeatherInfo();
@@ -259,10 +293,12 @@
       save();
       return;
     }
-    var id = D.L1[Math.floor(Math.random() * 3)];
+    // V1.5: 根据工具等级和天气获取物品
+    var id = getRandomItemByLevel();
     S.board[pos] = id;
     var cellRect = getCellRect(pos);
-    var bonus = wInfo.gatherBoost > 1 ? ' (+20%)' : '';
+    var toolLevel = getGatherLevel();
+    var bonus = (wInfo.gatherBoost > 1 || toolLevel > 1) ? (' Lv' + toolLevel) : '';
     Game.FX.floaty('\uD83C\uDFA3' + D.ITEMS[id].em + bonus, cellRect.x + cellRect.w / 2, cellRect.y - 8);
     // 采集物入格小弹跳
     if (!mergeAnim[pos]) mergeAnim[pos] = 0.35;
@@ -872,6 +908,46 @@
       isHungry: S.food === 0,
       effectiveMaxEnergy: S.food > 0 ? S.maxEnergy : Math.floor(S.maxEnergy * 0.5)
     };
+  };
+  // V1.5: 休息功能（每小时3次，+2体力）
+  App.getRestInfo = function () {
+    var now = Date.now();
+    var lastRest = S._lastRest || 0;
+    var hourMs = 3600 * 1000;
+    // 如果超过1小时，重置次数
+    if (now - lastRest > hourMs) {
+      S._restCount = 3;
+      S._lastRest = now;
+    }
+    return { left: S._restCount || 0 };
+  };
+  App.onRest = function () {
+    var info = App.getRestInfo();
+    if (info.left <= 0) { Game.FX.toast('休息冷却中，请稍后再试'); return; }
+    S._restCount--;
+    S.energy = Math.min(S.maxEnergy, S.energy + 2);
+    S.energyTs = Date.now();
+    Game.FX.toast('\uD83D\uDC4F 休息恢复 +2 体力');
+    save();
+  };
+  // V1.5: 分享功能（每天10次，+3体力）
+  App.getShareInfo = function () {
+    var today = new Date().toDateString();
+    if (S._shareDate !== today) {
+      S._shareDate = today;
+      S._shareCount = 10;
+    }
+    return { left: S._shareCount || 0 };
+  };
+  App.onShare = function () {
+    var info = App.getShareInfo();
+    if (info.left <= 0) { Game.FX.toast('今日分享次数已用完'); return; }
+    // 模拟分享：实际应该调用 wx.shareAppMessage
+    S._shareCount--;
+    S.energy = Math.min(S.maxEnergy, S.energy + 3);
+    S.energyTs = Date.now();
+    Game.FX.toast('\uD83D\uDD14 分享成功 +3 体力');
+    save();
   };
 
   Game.App = App;

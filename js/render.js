@@ -427,14 +427,21 @@
     btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83E\uDEB0 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
     hit(10 + gatherW + 6, ay, bottleW, 42, function () { Game.App.bottle(); });
 
-    // 广告按钮（对应 .btn-ad：左=+5体力，右=领离线翻倍）
+    // V1.5: 休息 + 分享按钮（替代广告按钮）
     var ay2 = H - 64;
-    var adW = (W - 20 - 6) / 2;
-    btn(ctx, 10, ay2, adW, 28, '\u25B6 看15s广告 +5体力', C.leaf, '#FFFFFF', true, pressed === 'adEnergy', 8, 11);
-    hit(10, ay2, adW, 28, function () { Game.App.onAdEnergy(); });
-    var offlineOn = Game.App.offlineUnclaimed();
-    btn(ctx, 10 + adW + 6, ay2, adW, 28, offlineOn ? '\u25B6 领离线翻倍' : '\u25B6 离线收益', C.leaf, '#FFFFFF', offlineOn, pressed === 'adOffline', 8, 11);
-    hit(10 + adW + 6, ay2, adW, 28, function () { Game.App.onAdOffline(); });
+    var btnW = (W - 20 - 6) / 2;
+    // 休息按钮：每小时3次，+2体力
+    var restInfo = Game.App.getRestInfo ? Game.App.getRestInfo() : null;
+    var restLeft = restInfo ? restInfo.left : 0;
+    var canRest = restLeft > 0;
+    btn(ctx, 10, ay2, btnW, 28, canRest ? ('\uD83D\uDC4F 休息 +2 (' + restLeft + ')') : '\uD83D\uDC4F 休息冷却中', C.leaf, '#FFFFFF', canRest, pressed === 'rest', 8, 11);
+    hit(10, ay2, btnW, 28, function () { Game.App.onRest(); });
+    // 分享按钮：每天10次，+3体力
+    var shareInfo = Game.App.getShareInfo ? Game.App.getShareInfo() : null;
+    var shareLeft = shareInfo ? shareInfo.left : 0;
+    var canShare = shareLeft > 0;
+    btn(ctx, 10 + btnW + 6, ay2, btnW, 28, canShare ? ('\uD83D\uDD14 分享 +3 (' + shareLeft + ')') : '\uD83D\uDD14 今日次数用完', C.sea, '#FFFFFF', canShare, pressed === 'share', 8, 11);
+    hit(10 + btnW + 6, ay2, btnW, 28, function () { Game.App.onShare(); });
 
     // Tab 栏（棋盘/建造/日记）抽到公共函数，保证每个 tab 页都有底部导航
     drawTabBar(ctx, W, H);
@@ -454,7 +461,7 @@
     }
   }
 
-  // ============ 建造 tab（V1.3 科技树 + V1.4 分支封锁） ============
+  // ============ 建造 tab（列表视图，更直观） ============
   function drawCamp(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
@@ -467,7 +474,7 @@
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('\uD83D\uDE80 科技树', W / 2, 18);
+    ctx.fillText('\uD83D\uDE80 建造', W / 2, 18);
 
     // V1.4: 显示被封锁的分支
     if (S.lockedTrees && S.lockedTrees.length > 0) {
@@ -482,97 +489,103 @@
       ctx.fillText('\uD83D\uDD12 本周目封锁：' + lockedNames, W / 2, 32);
     }
 
-    // V1.3: 绘制 4 分支科技树
-    var trees = Game.DATA.TECH_TREES;
-    var branchW = (W - 30) / 4; // 4 个分支
     var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 48 : 36;
+    var y = startY;
 
+    // 遍历所有科技树节点，以列表形式展示
+    var trees = Game.DATA.TECH_TREES;
     for (var t = 0; t < trees.length; t++) {
       var tree = trees[t];
-      var bx = 10 + t * branchW + 2;
-      // V1.4: 检查分支是否被封锁
       var isLocked = S.lockedTrees && S.lockedTrees.indexOf(tree.id) >= 0;
-      // 分支标题（被封锁时显示红色）
-      ctx.fillStyle = isLocked ? '#FF6B6B' : C.wood;
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(tree.em + ' ' + tree.name + (isLocked ? ' \uD83D\uDD12' : ''), bx + branchW / 2 - 2, startY + 10);
 
-      var nodeY = startY + 24;
+      // 分支标题
+      ctx.fillStyle = isLocked ? '#FF6B6B' : C.wood;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(tree.em + ' ' + tree.name + (isLocked ? ' \uD83D\uDD12' : ''), 16, y + 14);
+      y += 24;
+
       for (var n = 0; n < tree.nodes.length; n++) {
         var node = tree.nodes[n];
         var done = S.stages.indexOf(node.id) >= 0;
-        // V1.4: 分支被封锁时所有节点不可用
-        var branchLocked = isLocked;
-        // 检查前置节点
         var prevDone = node.prev === 0 || S.stages.indexOf(node.prev) >= 0;
+        var branchLocked = isLocked;
         var can = prevDone && !done && !branchLocked;
 
-        // 节点卡片
-        var cardH = 52;
+        var cardH = done ? 58 : 88;
+        // 卡片背景
         ctx.fillStyle = done ? C.doneBg : (branchLocked ? C.lockedBg : (prevDone ? C.paper : C.lockedBg));
-        roundRect(ctx, bx, nodeY, branchW - 4, cardH, 6);
+        roundRect(ctx, 10, y, W - 20, cardH, 8);
         ctx.fill();
-        ctx.strokeStyle = done ? C.leaf : (prevDone ? C.wood : C.lockedBorder);
-        ctx.lineWidth = 1;
-        roundRect(ctx, bx, nodeY, branchW - 4, cardH, 6);
+        ctx.strokeStyle = done ? C.leaf : (branchLocked ? '#FF6B6B' : (prevDone ? C.wood : C.lockedBorder));
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, 10, y, W - 20, cardH, 8);
         ctx.stroke();
 
         // 节点名称
         ctx.fillStyle = done ? C.ink : (branchLocked ? '#FF6B6B' : (prevDone ? C.ink : C.lockedText));
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.em, bx + (branchW - 4) / 2, nodeY + 12);
-        ctx.font = '8px sans-serif';
-        ctx.fillText(node.name, bx + (branchW - 4) / 2, nodeY + 24);
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(node.em + ' ' + node.name, 20, y + 16);
 
-        // 状态
-        ctx.font = '7px sans-serif';
+        // 状态标签
+        ctx.textAlign = 'right';
+        ctx.font = '10px sans-serif';
         if (done) {
           ctx.fillStyle = C.leaf;
-          ctx.fillText('\u2705', bx + (branchW - 4) / 2, nodeY + 40);
+          ctx.fillText('\u2705 已建成', W - 20, y + 16);
         } else if (branchLocked) {
           ctx.fillStyle = '#FF6B6B';
-          ctx.fillText('\uD83D\uDD12 封', bx + (branchW - 4) / 2, nodeY + 40);
+          ctx.fillText('\uD83D\uDD12 已封锁', W - 20, y + 16);
         } else if (!prevDone) {
           ctx.fillStyle = C.lockedText;
-          ctx.fillText('\uD83D\uDD12 锁', bx + (branchW - 4) / 2, nodeY + 40);
-        } else {
-          // 显示需求
-          var needTxt = '';
+          ctx.fillText('\uD83D\uDD12 前置未完成', W - 20, y + 16);
+        }
+
+        if (!done && !branchLocked) {
+          // 效果描述
+          ctx.textAlign = 'left';
+          ctx.fillStyle = C.wood;
+          ctx.font = '10px sans-serif';
+          ctx.fillText('效果：' + node.desc, 20, y + 34);
+
+          // 资源需求
+          var nx = 20;
           var hasAllRes = true;
           for (var id in node.need) {
             var have = Game.App.countItem(+id);
             var need = node.need[id];
-            needTxt += have + '/' + need + ' ';
-            if (have < need) hasAllRes = false;
+            var ok = have >= need;
+            if (!ok) hasAllRes = false;
+            var label = Game.DATA.ITEMS[id].em + have + '/' + need;
+            var pw = ctx.measureText(label).width + 10;
+            ctx.fillStyle = ok ? C.okGreen : C.paper2;
+            roundRect(ctx, nx, y + 42, pw, 16, 4);
+            ctx.fill();
+            ctx.fillStyle = C.ink;
+            ctx.font = '9px sans-serif';
+            ctx.fillText(label, nx + 4, y + 53);
+            nx += pw + 4;
           }
-          ctx.fillStyle = hasAllRes ? C.leaf : C.fire;
-          ctx.fillText(needTxt, bx + (branchW - 4) / 2, nodeY + 40);
+
           // 建造按钮
-          var bBtnW = branchW - 12, bBtnH = 14;
-          var hasRes = true;
-          for (var rid in node.need) {
-            if (Game.App.countItem(+rid) < node.need[rid]) { hasRes = false; break; }
-          }
-          btn(ctx, bx + 2, nodeY + cardH - 16, bBtnW, bBtnH, done ? '\u2705' : (hasRes ? '\u5EFA' : '\u7F04'), C.leaf, '#FFFFFF', hasRes && !done, pressed === 'build' + node.id, 4, 7);
-          hit(bx + 2, nodeY + cardH - 16, bBtnW, bBtnH, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
+          var bBtnW = 70, bBtnH = 22;
+          btn(ctx, W - 20 - bBtnW, y + cardH - 28, bBtnW, bBtnH, can ? '建造' : '不足', C.leaf, '#FFFFFF', hasAllRes && can, pressed === 'build' + node.id, 6, 10);
+          hit(W - 20 - bBtnW, y + cardH - 28, bBtnW, bBtnH, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
+        } else if (done) {
+          // 效果描述
+          ctx.textAlign = 'left';
+          ctx.fillStyle = C.ink;
+          ctx.font = '10px sans-serif';
+          ctx.fillText('效果：' + node.desc, 20, y + 38);
         }
 
-        // 连接线
-        if (n < tree.nodes.length - 1) {
-          ctx.strokeStyle = done ? C.leaf : C.paper3;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(bx + (branchW - 4) / 2, nodeY + cardH);
-          ctx.lineTo(bx + (branchW - 4) / 2, nodeY + cardH + 6);
-          ctx.stroke();
-        }
-        nodeY += cardH + 10;
+        y += cardH + 8;
       }
+      y += 8;
     }
 
-    // 底部导航（与棋盘/日记页一致）
+    // 底部导航
     drawTabBar(ctx, W, H);
   }
 
