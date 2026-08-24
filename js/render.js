@@ -25,6 +25,21 @@
     Game.hits.push({ x: x, y: y, w: w, h: h, cb: cb });
   }
 
+  // 文本自动换行（用于日记 / 胜利页多行文案）
+  function wrapText(ctx, text, maxW) {
+    var lines = [], line = '';
+    text = String(text || '');
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '\n') { lines.push(line); line = ''; continue; }
+      var test = line + ch;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = ch; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
   // 背景图 cover 填充（等比缩放铺满，居中裁切）
   function drawCover(ctx, img, W, H) {
     var iw = img.width, ih = img.height;
@@ -632,32 +647,85 @@
     drawTabBar(ctx, W, H);
   }
 
-  // ============ 日记 tab ============
+  // ============ 日记 tab（V1.8 小说体 · 章节分组 + 滚动 + 多行） ============
   function drawLog(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
+    var D = Game.DATA;
     ctx.fillStyle = C.sand;
     ctx.fillRect(0, 0, W, H);
 
-    var unlocked = Math.min(Game.DATA.LOGS.length, 1 + S.stages.length + Math.floor(S.day / 4));
-    var y = 16;
-    for (var i = 0; i < Game.DATA.LOGS.length; i++) {
-      var locked = i >= unlocked;
-      ctx.fillStyle = locked ? C.lockedBg : C.paper;
-      roundRect(ctx, 10, y, W - 20, 46, 10);
-      ctx.fill();
-      ctx.strokeStyle = locked ? C.lockedBorder : C.wood;
-      ctx.lineWidth = 1;
-      roundRect(ctx, 10, y, W - 20, 46, 10);
-      ctx.stroke();
-      ctx.fillStyle = locked ? C.lockedText : C.ink;
-      ctx.font = '12px sans-serif';
+    // 标题 + 解锁进度
+    ctx.fillStyle = C.wood;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\uD83D\uDCD6 求生日记', 16, 26);
+    ctx.textAlign = 'right';
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = C.ink;
+    ctx.fillText('已解锁 ' + S.diary.length + '/' + D.LOGS.length, W - 16, 26);
+
+    // 裁剪内容区（顶部标题下 ~44，底部 TabBar 上 ~56）
+    var top = 44, bottom = H - 56;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, W, bottom - top);
+    ctx.clip();
+
+    var y = top - (Game.logScrollY || 0);
+    var logs = D.LOGS, chaps = D.DIARY_CHAPTERS;
+    for (var c = 0; c < chaps.length; c++) {
+      var chId = chaps[c].id;
+      var anyUnlocked = false;
+      for (var a = 0; a < logs.length; a++) {
+        if (logs[a].ch === chId && S.diary.indexOf(a) >= 0) { anyUnlocked = true; break; }
+      }
+      if (!anyUnlocked) continue;
+      // 章节标题
+      ctx.fillStyle = C.wood;
+      ctx.font = 'bold 13px sans-serif';
       ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(locked ? '\uD83D\uDD12 ???（继续探索解锁）' : '\uD83C\uDFDC ' + Game.DATA.LOGS[i], 22, y + 23);
-      y += 54;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(chaps[c].name, 16, y + 16);
+      y += 24;
+      for (var i = 0; i < logs.length; i++) {
+        if (logs[i].ch !== chId) continue;
+        var unlocked = S.diary.indexOf(i) >= 0;
+        var cardH = unlocked ? 78 : 42;
+        ctx.fillStyle = unlocked ? C.paper : C.lockedBg;
+        roundRect(ctx, 10, y, W - 20, cardH, 10);
+        ctx.fill();
+        ctx.strokeStyle = unlocked ? C.wood : C.lockedBorder;
+        ctx.lineWidth = 1;
+        roundRect(ctx, 10, y, W - 20, cardH, 10);
+        ctx.stroke();
+        if (unlocked) {
+          ctx.fillStyle = C.ink;
+          ctx.font = 'bold 12px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillText('\u7B2C' + (i + 1) + '\u7BC7 \u00B7 ' + logs[i].title, 20, y + 18);
+          ctx.fillStyle = C.wood;
+          ctx.font = '10px sans-serif';
+          var lines = wrapText(ctx, logs[i].text, W - 40);
+          for (var ln = 0; ln < Math.min(lines.length, 3); ln++) {
+            ctx.fillText(lines[ln], 20, y + 34 + ln * 13);
+          }
+        } else {
+          ctx.fillStyle = C.lockedText;
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('\uD83D\uDD12 ???（继续求生解锁）', 20, y + cardH / 2);
+        }
+        y += cardH + 8;
+      }
+      y += 6;
     }
-    // 底部导航（与棋盘/建造页一致）
+    ctx.restore();
+    // 记录可滚动高度（供触摸滚动计算上限）
+    Game.logMaxScroll = Math.max(0, (y - top) - (bottom - top));
     drawTabBar(ctx, W, H);
   }
 
@@ -804,6 +872,109 @@
   }
 
   // ============ 场景分发 ============
+  // ============ 胜利庆祝场景（V1.8 真结局大庆祝） ============
+  function drawVictory(ctx, W, H, t) {
+    var C = Game.DATA.C;
+    var v = Game.victory || { day: 0, rebirths: 0, builds: 0, endings: 4 };
+    // 夜→晨渐变背景（6 秒一轮回）
+    var ph = (t % 6) / 6;
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a0f24');
+    g.addColorStop(0.5, '#16203f');
+    g.addColorStop(1, '#3a2c47');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // 星空（固定位置 + 闪烁）
+    for (var s = 0; s < 46; s++) {
+      var sx = (s * 53 % W);
+      var sy = (s * 97 % (H * 0.55));
+      var tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.5 + s));
+      ctx.globalAlpha = tw * 0.9;
+      ctx.fillStyle = '#FFF6D8';
+      ctx.fillRect(sx, sy, 1.6, 1.6);
+    }
+    ctx.globalAlpha = 1;
+
+    // 烟花（持续多簇绽放）
+    var bursts = 6;
+    for (var b = 0; b < bursts; b++) {
+      var age = ((t * 0.8 + b * 0.41) % 1.6) / 1.6; // 0..1
+      if (age > 0.85) continue;
+      var bx = (0.12 + b * 0.16) * W + Math.sin(t * 0.7 + b) * 14;
+      var by = H * 0.30 + (b % 2) * 26;
+      var radius = age * 130;
+      var alpha = (1 - age) * 0.9;
+      var hue = ['#FFD36E', '#FF7E9D', '#7EE8FA', '#B5FF9B', '#C9A7FF', '#FFB36E'][b % 6];
+      for (var p = 0; p < 14; p++) {
+        var ang = (p / 14) * Math.PI * 2;
+        var px = bx + Math.cos(ang) * radius;
+        var py = by + Math.sin(ang) * radius * 0.9;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = hue;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 发光主标题（脉冲缩放）
+    var pulse = 1 + Math.sin(t * 2) * 0.04;
+    ctx.save();
+    ctx.translate(W / 2, H * 0.30);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = 'rgba(255,210,120,0.9)';
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = '#FFE9A8';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\uD83C\uDFED\uFE0F 求生成功', 0, 0);
+    ctx.restore();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#F3E9D2';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u4F60\u96C6\u9F50\u4E86\u56DB\u79CD\u5F52\u9014\uFF0C\u6210\u4E3A\u8352\u5C9B\u771F\u6B63\u7684\u4E3B\u4EBA', W / 2, H * 0.30 + 28);
+
+    // 羊皮卷卡片（收尾章 + 统计）
+    var cardX = 18, cardW = W - 36, cardY = H * 0.40, cardH = H * 0.34;
+    ctx.fillStyle = C.paper;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 14);
+    ctx.fill();
+    ctx.strokeStyle = C.wood;
+    ctx.lineWidth = 2;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 14);
+    ctx.stroke();
+    // 收尾章（多行）
+    ctx.fillStyle = C.ink;
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    var vlines = wrapText(ctx, Game.DATA.VICTORY_TEXT, cardW - 32);
+    var startY = cardY + 22;
+    for (var vi = 0; vi < vlines.length && vi < 8; vi++) {
+      ctx.fillText(vlines[vi], cardX + 16, startY + vi * 15);
+    }
+    // 统计行
+    var statY = cardY + cardH - 20;
+    ctx.fillStyle = C.wood;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    var stat = '\u5B58\u6D3B ' + v.day + ' \u5929  \u00B7  \u8F6E\u56DE ' + v.rebirths + ' \u00B7  \u5EFA\u9020 ' + v.builds + ' \u00B7  \u7ED3\u5C40 ' + v.endings + '/4';
+    ctx.fillText(stat, W / 2, statY);
+
+    // 按钮（翻看日记 / 再启新程）
+    var bw = (W - 36 - 16) / 2, bh = 44, by = H - 56;
+    btn(ctx, 18, by, bw, bh, '\u7FFB\u770B\u65E5\u8BB0', C.wood, '#FFFFFF', true, Game.pressed === 'vlog', 10, 13);
+    hit(18, by, bw, bh, function () { if (Game.App.viewDiaryFromVictory) Game.App.viewDiaryFromVictory(); });
+    btn(ctx, 18 + bw + 16, by, bw, bh, '\u518D\u542F\u65B0\u7A0B', C.leaf, '#FFFFFF', true, Game.pressed === 'vrestart', 10, 13);
+    hit(18 + bw + 16, by, bw, bh, function () { if (Game.App.restartAfterVictory) Game.App.restartAfterVictory(); });
+  }
+
   function render(ctx, W, H, t) {
     Game.hits = [];
     var sc = Game.scene;
@@ -813,6 +984,8 @@
       drawCG(ctx, W, H, t);
     } else if (sc === 'loading') {
       drawLoading(ctx, W, H, t);
+    } else if (sc === 'victory') {
+      drawVictory(ctx, W, H, t);
     } else {
       // game
       if (Game.tab === 'camp') drawCamp(ctx, W, H);

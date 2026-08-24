@@ -130,16 +130,50 @@
     '岛上物资多得拿不动，该建造了。'
   ];
 
-  // 日记（28 天原著风，7 篇）
+  // 日记（小说体 · 鲁滨逊漂流风格，与玩法进度联动解锁，共 23 篇 / 5 章）
+  // req = 解锁所需「日记进度分」(diaryScore)；结局篇 req=999 仅由对应结局触发显式解锁
   var LOGS = [
-    'Day 1 · 风暴把我卷上这片无名沙滩，除了几根浮木一无所有。',
-    'Day 3 · 我搭起第一个避难棚，夜里终于能睡个安稳觉。',
-    'Day 7 · 发现岛上有椰子林和石矿，食物不用愁了。',
-    'Day 12 · 我把木板拼成木架，营地有了雏形。',
-    'Day 18 · 捡到一只漂流瓶，里面竟是张残破的航海图。',
-    'Day 25 · 围墙建好后，野兽再不敢夜袭。',
-    'Day 28 · 我在山顶燃起烽火——远方，有船的影子。'
+    { ch: 'ch1', title: '搁浅', text: '风暴撕碎了船帆，我被冲上这片无名礁岸。除了一身湿衣与几截浮木，我一无所有。' },
+    { ch: 'ch1', title: '第一夜', text: '用浮木压住茅草，搭起第一个勉强遮风的窝棚。海风呜咽，我却第一次觉得——活着本身已是恩赐。' },
+    { ch: 'ch1', title: '潮线', text: '退潮后的滩涂像被翻开的宝库：贝壳、浮木、缠网的玻璃瓶。我开始懂得，岛不是牢笼，是仓库。' },
+    { ch: 'ch1', title: '绳与结', text: '拆下船索，学鲁滨逊那样把纤维搓成绳。一根绳，便是一双永远不会累的手。' },
+    { ch: 'ch2', title: '棚屋', text: '第一座像样的棚屋立起来了。夜里不再畏寒，我甚至生出了「家」这个奢侈的念头。' },
+    { ch: 'ch2', title: '结绳记事', text: '在棚柱上刻下一道道痕——这是我的历书。数字不会骗人，日子在变长。' },
+    { ch: 'ch2', title: '椰林', text: '林子里有成片的椰子树。敲开一只，清甜的汁水滑过喉咙，饥饿第一次向我低头。' },
+    { ch: 'ch2', title: '风暴夜', text: '又一场风暴。我蜷在棚里听天地咆哮，庆幸自己早筑了墙。恐惧仍在，却不再致命。' },
+    { ch: 'ch3', title: '灶火', text: '两块石相击，火星落进枯草。火苗窜起的刹那，文明在指尖复活——我烤熟了第一块肉。' },
+    { ch: 'ch3', title: '蓄水池', text: '挖凹处、铺蕉叶，我存下了雨水。水比金子贵，在岛上尤是。' },
+    { ch: 'ch3', title: '远足', text: '循着兽径深入岛屿腹地，发现了淡水溪与野果丛。地图在脚下一寸寸展开。' },
+    { ch: 'ch3', title: '遇兽', text: '野兽夜袭营地。我举起火把，它竟退去。原来「威胁」与「主人」之间，只差一道火光。' },
+    { ch: 'ch3', title: '海图', text: '一只漂流瓶里塞着残破海图，墨迹晕开却仍能辨出海岸线。有人来过，或终将有人来。' },
+    { ch: 'ch4', title: '围墙', text: '木桩围出营地，藤蔓缠紧缝隙。墙内是「我的」，墙外才是荒岛。' },
+    { ch: 'ch4', title: '烽燧', text: '山顶垒起烽燧。若是过往的船看见这缕烟，我便不再是与世隔绝的幽灵。' },
+    { ch: 'ch4', title: '陷阱', text: '在滩涂布下陷阱，用鱼作饵。耐心，是岛上最被低估的武器。' },
+    { ch: 'ch4', title: '船坞', text: '清空一段海岸作船坞，龙骨的雏形卧在沙上。归途，第一次有了形状。' },
+    { ch: 'ch4', title: '守望', text: '我常登高一望。海平线空荡荡，心里却踏实——因为一切都已就位，只等风来。' },
+    { ch: 'ch5', title: '结局·部落', text: '烽烟引来近海的部落。他们划着独木舟靠岸，用我听不懂的语言邀我同住。历经风雨，我终于不再是孤岛上的独行者。', req: 999, ending: 'end_defense' },
+    { ch: 'ch5', title: '结局·商船', text: '陷阱里卡住的，竟是一艘迷航的商船！船员们惊魂未定，却向我深深鞠躬。我乘他们的船，驶离了这片守了许久的岸。', req: 999, ending: 'end_gather' },
+    { ch: 'ch5', title: '结局·归航', text: '最后一截木板钉牢，我的船下水了。它不大，却装得下全部家当与三年时光。扬帆那一刻，岛在身后缩小成一枚绿色的钉。', req: 999, ending: 'end_build' },
+    { ch: 'ch5', title: '结局·新陆', text: '小舟顺流漂了数日，地平线终于隆起成陆。陌生的鸟鸣、陌生的风——又一场漂流，在另一片海岸重新开始。', req: 999, ending: 'end_explore' },
+    { ch: 'ch5', title: '真结局·四象归一', text: '潮水数度涨落，我在岛上刻下的不只是年轮，还有四种活法。四象归一，荒岛不再是流放，而是一所学校。', req: 999, ending: 'true' }
   ];
+  // 给前面 18 篇补上 req（按章节递进，随玩法进度解锁）
+  LOGS[0].req = 0; LOGS[1].req = 0; LOGS[2].req = 1; LOGS[3].req = 2;
+  LOGS[4].req = 3; LOGS[5].req = 4; LOGS[6].req = 5; LOGS[7].req = 6;
+  LOGS[8].req = 7; LOGS[9].req = 8; LOGS[10].req = 9; LOGS[11].req = 10; LOGS[12].req = 11;
+  LOGS[13].req = 12; LOGS[14].req = 13; LOGS[15].req = 14; LOGS[16].req = 15; LOGS[17].req = 16;
+
+  // 日记章节顺序（用于日记页分组渲染）
+  var DIARY_CHAPTERS = [
+    { id: 'ch1', name: '第一章 · 搁浅' },
+    { id: 'ch2', name: '第二章 · 安身' },
+    { id: 'ch3', name: '第三章 · 谋生' },
+    { id: 'ch4', name: '第四章 · 御险' },
+    { id: 'ch5', name: '第五章 · 归途' }
+  ];
+
+  // 真结局收尾章（胜利庆祝页羊皮卷正文）
+  var VICTORY_TEXT = '潮水数度涨落，我在岛上刻下的不只是年轮，还有四种活法。\n\n有人循着烽烟来，与我同火；有人被我的陷阱留住，载我远航；有人接过我手制的船，替我去看海平线之外；也有人随我的小舟，在另一片陆地重燃炉火。\n\n四象归一，荒岛不再是流放，而是一所学校——我学会了向风暴低头，也学会了在低谷里造船。\n\n谨以此记，赠每一个仍在某座岛上的人。';
 
   // 天数过渡素材
   var DT_ICONS = ['\u2600\uFE0F', '\uD83C\uDF24\uFE0F', '\uD83C\uDF04', '\uD83C\uDF19'];
@@ -204,7 +238,8 @@
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
     TECH_TREES: TECH_TREES,
     E_INTERVAL: E_INTERVAL, MISS_LINES: MISS_LINES, FULL_LINES: FULL_LINES,
-    LOGS: LOGS, DT_ICONS: DT_ICONS, DT_SUBS: DT_SUBS, CG_TEXT: CG_TEXT,
+    LOGS: LOGS, DIARY_CHAPTERS: DIARY_CHAPTERS, VICTORY_TEXT: VICTORY_TEXT,
+    DT_ICONS: DT_ICONS, DT_SUBS: DT_SUBS, CG_TEXT: CG_TEXT,
     MISS_RATE: MISS_RATE, ITEM_IMG: ITEM_IMG, DAILY_BOTTLE: DAILY_BOTTLE,
     BG_IMG: BG_IMG, WEATHER: WEATHER, EVENTS: EVENTS
   };

@@ -39,7 +39,9 @@
       // V1.2 饱食度系统
       food: 10, maxFood: 10, foodDate: today,
       // V1.4 轮回封锁（首次为空，轮回后随机生成）
-      lockedTrees: []
+      lockedTrees: [],
+      // V1.8: 小说日记进度（随玩法解锁）与真结局 meta
+      diaryScore: 0, diary: [], earnedEndings: [], rebirths: 0, totalBuilds: 0, totalDays: 0
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -52,6 +54,21 @@
     if (!Array.isArray(s.stages)) s.stages = [];
     if (typeof s.bottleDate !== 'string') s.bottleDate = new Date().toDateString();
     return s;
+  }
+  // V1.8: 小说日记解锁（进度分驱动 + 结局显式解锁）
+  function diaryUnlock(idx) {
+    if (S.diary.indexOf(idx) < 0) S.diary.push(idx);
+  }
+  function recomputeDiary() {
+    for (var i = 0; i < D.LOGS.length; i++) {
+      var req = D.LOGS[i].req;
+      if (req !== undefined && req <= S.diaryScore) diaryUnlock(i);
+    }
+    S.diary.sort(function (a, b) { return a - b; });
+  }
+  function addDiaryScore(n) {
+    S.diaryScore += n;
+    recomputeDiary();
   }
   // 每日漂流瓶重置（修复：原实现漂流瓶一次性消耗，再也不会刷新）
   function dailyBottleReset() {
@@ -171,6 +188,7 @@
       S._sunnyGift = true;
       Game.FX.toast('晴天惊喜！下次采集体力 +1');
     }
+    addDiaryScore(1); // V1.8: 经历事件也推进日记
     save();
     // 继续显示下一个事件
     if (idx + 1 < events.length) {
@@ -290,6 +308,7 @@
       S.board[pos] = result.id; // 同时作为食物留在棋盘
       Game.FX.floaty('\uD83E\uDD65 +' + gain + '体力', cx, cy);
       Game.FX.toast('发现椰果！体力 +' + gain);
+      addDiaryScore(1); // V1.8: 发现椰果解锁「椰林」篇
     } else {
       S.board[pos] = result.id;
       var toolLevel = getGatherLevel();
@@ -418,12 +437,16 @@
     // V1.3: 检查是否触发结局
     if (st.unlocks && st.unlocks.indexOf('end_') === 0) {
       S.day++;
+      S.totalBuilds++; S.totalDays++;
+      addDiaryScore(3);
       save();
       triggerEnding(st);
       return;
     }
     // 非结局节点，增加天数
     S.day++;
+    S.totalBuilds++; S.totalDays++;
+    addDiaryScore(1);
     save();
     // 天数过渡动画 → 营地升级光晕 → 提示
     Game.FX.dayTransition(S.day, function () {
@@ -464,7 +487,7 @@
     save();
   }
 
-  // ============ 结局 / 轮回（V1.3 多结局） ============
+  // ============ 结局 / 轮回（V1.3 多结局 + V1.8 真结局） ============
   function triggerEnding(st) {
     // V1.3: 根据不同结局类型显示不同文案
     var endings = {
@@ -474,19 +497,62 @@
       'end_explore': { title: '\uD83D\uDED1 发现新大陆！', body: '你乘坐小舟漂流数日后，发现了未知陆地！\n历经 ' + S.day + ' 天，展开了新的冒险。' }
     };
     var ending = endings[st.unlocks] || endings['end_defense'];
+    // V1.8: 记录已集齐结局 + 解锁对应日记篇
+    if (S.earnedEndings.indexOf(st.unlocks) < 0) S.earnedEndings.push(st.unlocks);
+    for (var li = 0; li < D.LOGS.length; li++) {
+      if (D.LOGS[li].ending === st.unlocks) { diaryUnlock(li); break; }
+    }
+    save();
+    // V1.8: 集齐四种归途 → 真结局胜利庆祝（大结局）
+    if (S.earnedEndings.length >= 4) { triggerVictory(); return; }
+    var got = S.earnedEndings.length;
     openModal({
       title: ending.title,
-      body: ending.body + '\n\n开启新一周目？保留「求生手册」加成（体力上限+建成数）。',
+      body: ending.body + '\n\n【归途 ' + got + '/4】集齐四种结局可解锁「真结局·四象归一」大结局。\n开启新一周目？保留「求生手册」加成（体力上限+建成数）。',
       buttons: [
         { label: '再看看岛', primary: false, cb: function () { closeModal(); } },
         { label: '轮回重生', primary: true, cb: function () { rebirth(); } }
       ]
     });
   }
+  // V1.8: 真结局 —— 集齐四种归途后进入精致胜利庆祝场景
+  function triggerVictory() {
+    diaryUnlock(D.LOGS.length - 1); // 解锁「真结局·四象归一」篇
+    save();
+    Game.victory = {
+      day: S.day,
+      rebirths: S.rebirths,
+      builds: S.totalBuilds,
+      endings: S.earnedEndings.length
+    };
+    Game.scene = 'victory';
+  }
+  // V1.8: 胜利页「再启新程」—— 保留已集齐结局图鉴，开启全新一周目
+  function restartAfterVictory() {
+    var keepEndings = S.earnedEndings.slice();
+    var rb = S.rebirths + 1;
+    S = freshSave(10);
+    S.earnedEndings = keepEndings;
+    S.rebirths = rb;
+    S.entered = true;
+    recomputeDiary();
+    save();
+    Game.S = S;
+    Game.scene = 'loading';
+    Game.loadStart = Date.now();
+  }
+  // V1.8: 胜利页「翻看日记」—— 直接跳到日记页回味小说
+  function viewDiaryFromVictory() {
+    Game.scene = 'game';
+    Game.tab = 'log';
+  }
   function rebirth() {
     var keep = S.stages.length;
     var maxE = 10 + keep;
     var oldEnter = S.entered;
+    // V1.8: 保留已集齐结局图鉴与轮回计数（否则真结局进度会被清掉）
+    var keepEndings = S.earnedEndings ? S.earnedEndings.slice() : [];
+    var rb = (S.rebirths || 0) + 1;
     // V1.4: 随机封锁 2 条科技分支
     var allTreeIds = ['defense', 'gather', 'build', 'explore'];
     var shuffled = allTreeIds.slice().sort(function () { return Math.random() - 0.5; });
@@ -494,6 +560,8 @@
     S = freshSave(maxE);
     S.manualBonus = keep;
     S.entered = oldEnter;
+    S.earnedEndings = keepEndings;
+    S.rebirths = rb;
     // V1.4: 记录被封锁的分支
     S.lockedTrees = lockedTrees;
     dailyBottleReset();
@@ -577,6 +645,9 @@
     });
   };
 
+  // V1.8: 胜利庆祝页按钮回调（供 render.drawVictory 调用）
+  App.restartAfterVictory = restartAfterVictory;
+  App.viewDiaryFromVictory = viewDiaryFromVictory;
   // ============ 离线收益 ============
   function calcOffline() {
     if (!S.offlineUnlocked) { S._offlineReward = 0; return; }
@@ -690,6 +761,8 @@
     Game.scene = 'loading';
     Game.loadStart = Date.now();
     S.entered = true;
+    // V1.8: 进入即解锁日记前两篇（搁浅 / 第一夜）
+    if (S.diaryScore < 1) { S.diaryScore = 1; recomputeDiary(); }
     // 首次进入额外赠送体力（仅一次），让新用户多玩一会儿
     if (!S.welcomed) {
       S.maxEnergy += 10;
@@ -783,6 +856,11 @@
       scrollTouchStartScrollY = Game.campScrollY || 0;
       campScrollMoved = false;
       inScroll = true;
+    } else if (Game.scene === 'game' && Game.tab === 'log' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
+      // V1.8: 日记页滚动检测
+      scrollTouchStartY = p.y;
+      scrollTouchStartScrollY = Game.logScrollY || 0;
+      inScroll = true;
     }
     if (!inScroll) scrollTouchStartY = null;
     // 正常场景：逆序命中（上层优先）
@@ -842,10 +920,13 @@
       // V1.6: 建造页滚动（区分点击与滑动）
       var cdy = scrollTouchStartY - p.y;
       if (Math.abs(cdy) > 6) campScrollMoved = true;
-      var newCampY = scrollTouchStartScrollY + cdy * 1.5;
-      var cMax = Game.campMaxScroll || 0;
-      Game.campScrollY = Math.max(0, Math.min(cMax, newCampY));
-      if (campScrollMoved) pendingHit = null; // 拖动时不触发按钮
+      var maxCamp = Game.campMaxScroll || 0;
+      Game.campScrollY = Math.max(0, Math.min(maxCamp, scrollTouchStartScrollY + cdy * 1.5));
+    } else if (Game.tab === 'log') {
+      // V1.8: 日记页滚动
+      var ldy = scrollTouchStartY - p.y;
+      var maxLog = Game.logMaxScroll || 0;
+      Game.logScrollY = Math.max(0, Math.min(maxLog, scrollTouchStartScrollY + ldy * 1.5));
     }
   }
   function onTouchCancel() {
