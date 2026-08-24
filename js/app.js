@@ -531,15 +531,24 @@
   function restartAfterVictory() {
     var keepEndings = S.earnedEndings.slice();
     var rb = S.rebirths + 1;
+    // V1.8审查修复: 跨周目保留日记与累计统计
+    var keepDiary = (S.diary || []).slice();
+    var keepDiaryScore = S.diaryScore || 0;
+    var keepTotalDays = S.totalDays || 0;
+    var keepTotalBuilds = S.totalBuilds || 0;
     S = freshSave(10);
     S.earnedEndings = keepEndings;
     S.rebirths = rb;
+    S.diary = keepDiary;
+    S.diaryScore = keepDiaryScore;
+    S.totalDays = keepTotalDays;
+    S.totalBuilds = keepTotalBuilds;
     S.entered = true;
     recomputeDiary();
     save();
     Game.S = S;
-    Game.scene = 'loading';
-    Game.loadStart = Date.now();
+    // V1.8审查修复: 必须走 enterGame 才能真正进入游戏（原实现只切到 loading 场景却没启动 2.5s 倒计时，会永久卡在加载页）
+    enterGame();
   }
   // V1.8: 胜利页「翻看日记」—— 直接跳到日记页回味小说
   function viewDiaryFromVictory() {
@@ -547,11 +556,18 @@
     Game.tab = 'log';
   }
   function rebirth() {
+    // 关闭可能残留的弹窗（结局弹窗点击「轮回重生」时不会自动关，会导致弹窗卡在首页并可被重复点击）
+    closeModal();
     var keep = S.stages.length;
     var maxE = 10 + keep;
     var oldEnter = S.entered;
     // V1.8: 保留已集齐结局图鉴与轮回计数（否则真结局进度会被清掉）
     var keepEndings = S.earnedEndings ? S.earnedEndings.slice() : [];
+    // V1.8审查修复: 日记与累计统计应跨周目保留（否则刚写的小说日记/累计数据会在轮回时被清掉）
+    var keepDiary = (S.diary || []).slice();
+    var keepDiaryScore = S.diaryScore || 0;
+    var keepTotalDays = S.totalDays || 0;
+    var keepTotalBuilds = S.totalBuilds || 0;
     var rb = (S.rebirths || 0) + 1;
     // V1.4: 随机封锁 2 条科技分支
     var allTreeIds = ['defense', 'gather', 'build', 'explore'];
@@ -562,6 +578,12 @@
     S.entered = oldEnter;
     S.earnedEndings = keepEndings;
     S.rebirths = rb;
+    // V1.8审查修复: 跨周目保留日记与累计统计
+    S.diary = keepDiary;
+    S.diaryScore = keepDiaryScore;
+    S.totalDays = keepTotalDays;
+    S.totalBuilds = keepTotalBuilds;
+    recomputeDiary();
     // V1.4: 记录被封锁的分支
     S.lockedTrees = lockedTrees;
     dailyBottleReset();
@@ -582,6 +604,8 @@
 
   // ============ 漂流瓶 ============
   function bottle() {
+    // V1.8审查修复: 采集动画进行中禁止漂流瓶，避免 2.4s 后落子时覆盖刚开出的格子
+    if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) { Game.FX.toast('采集中，请稍候'); return; }
     if (S.bottle <= 0) {
       Game.FX.toast('今日漂流瓶已捞完，看广告可多捞');
       Game.AD.showReward('bottle', function () { grantAd('bottle'); });
@@ -674,6 +698,9 @@
   // 体力倒计时文案（对应 #energyTimer）
   function energyTimerText() {
     if (S.energy >= S.maxEnergy) return '\u6EE1'; // 满
+    // V1.8审查修复: 风暴天 energyRate=0，体力不会恢复，倒计时会误导玩家以为在回体力
+    var w = getWeatherInfo();
+    if (w && !w.energyRate) return '\u26C8\uFE0F 停';
     var remain = Math.max(0, Math.ceil((D.E_INTERVAL - (Date.now() - S.energyTs)) / 1000));
     return remain + 's';
   }
@@ -694,7 +721,7 @@
   function campTagText() {
     var lvl = S.stages.length;
     // 计算已完成节点最多的分支
-    var treeCounts = {};
+    var treeCounts = {}, treeMax = {};
     for (var t = 0; t < D.TECH_TREES.length; t++) {
       var treeId = D.TECH_TREES[t].id;
       var count = 0;
@@ -702,6 +729,7 @@
         if (S.stages.indexOf(D.TECH_TREES[t].nodes[n].id) >= 0) count++;
       }
       treeCounts[treeId] = count;
+      treeMax[treeId] = D.TECH_TREES[t].nodes.length; // V1.8审查修复: 分支节点数已是5，原来写死 /3 会错位
     }
     // 找到进度最快的分支
     var maxTree = null, maxCount = 0;
@@ -714,11 +742,13 @@
         if (D.TECH_TREES[tt].id === maxTree) return D.TECH_TREES[tt].name;
       }
     })() : '';
-    return '\u8425\u5730 Lv.' + Math.floor(lvl / 3) + ' \u00B7 ' + treeName + ' ' + maxCount + '/3';
+    var maxNode = maxTree ? treeMax[maxTree] : 5;
+    return '\u8425\u5730 Lv.' + Math.floor(lvl / 5) + ' \u00B7 ' + treeName + ' ' + maxCount + '/' + maxNode;
   }
 
   // ============ 首页 / CG ============
   var cg = null;
+  var cgTimer = null, cgSinkTimer = null, cgEntered = false;
 
   function startLabel() {
     if (S.day > 1 || S.stages.length > 0 || S.entered) return '\u7EE7\u7EED\u5192\u9669'; // 继续冒险
@@ -731,27 +761,36 @@
   }
   function playCG() {
     Game.scene = 'cg';
+    cgEntered = false;
     cg = { shown: '', sink: 0, started: false };
     Game.cg = cg;
     var text = D.CG_TEXT;
     var i = 0;
-    var timer = setInterval(function () {
+    if (cgTimer) clearInterval(cgTimer);
+    if (cgSinkTimer) clearTimeout(cgSinkTimer);
+    cgTimer = setInterval(function () {
       i++;
       cg.shown = text.substring(0, i);
       if (i >= text.length) {
-        clearInterval(timer);
+        clearInterval(cgTimer);
+        cgTimer = null;
         // 打字完成后船下沉
         cg.started = true;
-        setTimeout(function () { enterGame(); }, 700);
+        // 仅当尚未进入游戏时才自动进入（防止跳过 CG 后二次 enterGame）
+        if (!cgEntered) { cgEntered = true; setTimeout(function () { enterGame(); }, 700); }
       }
     }, 55);
-    // 船 2.2s 后开始下沉
-    setTimeout(function () {
-      if (Game.scene === 'cg' && cg) { cg.sink = 1; } // 下沉（1 = 完全下沉淡出）
+    // 船 2.2s 后开始下沉（记录起始时刻，由 drawCG 平滑驱动，避免死代码）
+    cgSinkTimer = setTimeout(function () {
+      if (Game.scene === 'cg' && cg) { cg.sinkStart = Date.now() / 1000; cg.boatY = 0; }
     }, 2200);
   }
   function skipCG() {
     if (Game.scene === 'cg') {
+      // 清理定时器，避免打字完成回调再次触发 enterGame（双重进入）
+      if (cgTimer) { clearInterval(cgTimer); cgTimer = null; }
+      if (cgSinkTimer) { clearTimeout(cgSinkTimer); cgSinkTimer = null; }
+      cgEntered = true;
       Game.scene = 'home';
       enterGame();
     }

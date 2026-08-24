@@ -150,13 +150,13 @@
     // 船：颠簸旋转（对应 .cg-boat boat 动画）
     var cg = Game.cg;
     if (cg && cg.boatY !== undefined) {
-      // 船已下沉（阶段2）
-      ctx.globalAlpha = Math.max(0, 1 - cg.sink);
-      var r = 20 * cg.sink;
+      // 船已下沉（阶段2）：由 sinkStart 平滑驱动下沉淡出（修复原死代码 cg.sink 直接置1导致无动画）
+      var sink = cg.sinkStart ? Math.min(1, Math.max(0, (t - cg.sinkStart) / 0.8)) : 0;
+      ctx.globalAlpha = Math.max(0, 1 - sink);
       ctx.font = '56px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('\uD83D\uDEB2', W / 2, H * 0.4 + cg.boatY + cg.sink * 40);
+      ctx.fillText('\uD83D\uDEB2', W / 2, H * 0.4 + cg.boatY + sink * 40);
       ctx.globalAlpha = 1;
     } else {
       var sway = Math.sin(t * 2.8);
