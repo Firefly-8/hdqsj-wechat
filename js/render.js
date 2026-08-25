@@ -221,9 +221,9 @@
     // V1.1: 天气显示（右侧）
     var wInfo = Game.App.getWeatherInfo ? Game.App.getWeatherInfo() : null;
     var weatherText = wInfo ? (wInfo.em + ' ' + wInfo.name) : '';
-    // V1.2: 饱食度显示
+    // V1.2: 饱食度显示（V1.9: 图标由饭团🍙改为炭烤椰排🍖，与椰系食物链一致）
     var fInfo = Game.App.getFoodInfo ? Game.App.getFoodInfo() : null;
-    var foodText = fInfo ? ('\uD83C\uDF69 ' + fInfo.food + '/' + fInfo.maxFood) : '';
+    var foodText = fInfo ? ('\uD83C\uDF56 ' + fInfo.food + '/' + fInfo.maxFood) : '';
     if (fInfo && fInfo.isHungry) foodText = '\uD83D\uDC94 饥饿'; // 饿肚子时显示警告
     ctx.textAlign = 'right';
     ctx.font = '12px sans-serif';
@@ -281,6 +281,9 @@
     ctx.restore();
 
     // 资源条（对应 .resbar：木材/食物/石料 棋盘内计数）
+    // V1.9: 统计逻辑本身正确（countChain 每帧实时统计棋盘内该链物品总数）
+    // 注意：① 该数字是「链总量」，建造消耗的是具体物品（如浮木×3），以建造页缺口为准；②「食物」=食物物品数，与顶栏饱食度(🍖 x/10)是两套概念
+    // 增强：点击资源条 → 跳到建造页对照缺口
     var resData = [
       ['\uD83E\uDEB5 木材', Game.App.countChain('wood'), C.fire],
       ['\uD83E\uDD65 食物', Game.App.countChain('food'), C.fire],
@@ -305,6 +308,8 @@
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(String(resData[i][1]), rx + rw - 8, ry + 17);
+      // V1.9增强: 点击资源条跳到建造页（快速对照各节点具体缺口）
+      hit(rx, ry, rw, 34, (function () { return function () { Game.App.switchTab('camp'); }; })());
     }
 
     // 棋盘面板（对应 .panel）- 改为 4 列，支持上下滚动
@@ -512,13 +517,20 @@
 
     // 遍历所有科技树节点，以列表形式展示（V1.6: 支持滚动）
     var trees = Game.DATA.TECH_TREES;
+    // V1.9: 分支配色（分组概念：区分 防御/采集/建造/探索 四类，便于快速阅读）
+    var BRANCH_STYLE = {
+      defense: { color: '#E8763A', light: '#FBE7D9' },
+      gather:  { color: '#6FA860', light: '#E4F0E0' },
+      build:   { color: '#8B5E3C', light: '#EFE0D2' },
+      explore: { color: '#2E7D9A', light: '#DEEBF0' }
+    };
 
     // 预计算内容总高度，用于裁剪与滚动范围
     var contentTop = startY;
     var bottom = H - 34;
     var preY = contentTop;
     for (var pt = 0; pt < trees.length; pt++) {
-      preY += 24;
+      preY += 36; // V1.9: 分组头高度(30 + 6 间距)
       for (var pn = 0; pn < trees[pt].nodes.length; pn++) {
         var pdone = S.stages.indexOf(trees[pt].nodes[pn].id) >= 0;
         preY += (pdone ? 58 : 88) + 8;
@@ -539,14 +551,28 @@
     for (var t = 0; t < trees.length; t++) {
       var tree = trees[t];
       var isLocked = S.lockedTrees && S.lockedTrees.indexOf(tree.id) >= 0;
+      var bs = BRANCH_STYLE[tree.id] || BRANCH_STYLE.defense;
 
-      // 分支标题
+      // V1.9: 分组头（分支色条 + 图标名称 + 进度 + 锁定标记），按分支快速区分
       var ty = y - Game.campScrollY;
-      ctx.fillStyle = isLocked ? '#FF6B6B' : C.wood;
-      ctx.font = 'bold 12px sans-serif';
+      var hdrH = 30;
+      ctx.fillStyle = isLocked ? C.lockedBg : bs.light;
+      roundRect(ctx, 10, ty, W - 20, hdrH, 8);
+      ctx.fill();
+      ctx.fillStyle = isLocked ? '#FF6B6B' : bs.color;
+      ctx.fillRect(10, ty, 4, hdrH); // 左侧分支色条
       ctx.textAlign = 'left';
-      ctx.fillText(tree.em + ' ' + tree.name + (isLocked ? ' \uD83D\uDD12' : ''), 16, ty + 14);
-      y += 24;
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = isLocked ? '#FF6B6B' : C.ink;
+      ctx.fillText(tree.em + ' ' + tree.name, 22, ty + hdrH / 2);
+      var builtCount = 0;
+      for (var bn = 0; bn < tree.nodes.length; bn++) if (S.stages.indexOf(tree.nodes[bn].id) >= 0) builtCount++;
+      ctx.textAlign = 'right';
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = isLocked ? '#FF6B6B' : C.wood;
+      ctx.fillText(isLocked ? '\uD83D\uDD12 已封锁' : ('已建 ' + builtCount + '/' + tree.nodes.length), W - 20, ty + hdrH / 2);
+      y += hdrH + 6;
 
       for (var n = 0; n < tree.nodes.length; n++) {
         var node = tree.nodes[n];
@@ -565,6 +591,11 @@
         ctx.lineWidth = 1.5;
         roundRect(ctx, 10, oy, W - 20, cardH, 8);
         ctx.stroke();
+        // V1.9: 可建/待解锁节点加分支色左边条，强化分组视觉
+        if (!done && !branchLocked) {
+          ctx.fillStyle = bs.color;
+          ctx.fillRect(10, oy, 3, cardH);
+        }
 
         // 节点名称
         ctx.fillStyle = done ? C.ink : (branchLocked ? '#FF6B6B' : (prevDone ? C.ink : C.lockedText));
@@ -673,8 +704,9 @@
     ctx.rect(0, top, W, bottom - top);
     ctx.clip();
 
-    var y = top - (Game.logScrollY || 0);
     var logs = D.LOGS, chaps = D.DIARY_CHAPTERS;
+    var y = top - (Game.logScrollY || 0);
+    var contentH = 0; // V1.9修复: 独立累计内容高（不随 scrollY 偏移），供滚动上限计算
     for (var c = 0; c < chaps.length; c++) {
       var chId = chaps[c].id;
       var anyUnlocked = false;
@@ -688,7 +720,7 @@
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(chaps[c].name, 16, y + 16);
-      y += 24;
+      y += 24; contentH += 24;
       for (var i = 0; i < logs.length; i++) {
         if (logs[i].ch !== chId) continue;
         var unlocked = S.diary.indexOf(i) >= 0;
@@ -713,19 +745,21 @@
             ctx.fillText(lines[ln], 20, y + 34 + ln * 13);
           }
         } else {
+          // V1.9机制修复: 明确提示解锁条件（第 N 天 / 达成结局），取代含糊的「继续求生解锁」
+          var reqD = logs[i].req;
           ctx.fillStyle = C.lockedText;
           ctx.font = '11px sans-serif';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
-          ctx.fillText('\uD83D\uDD12 ???（继续求生解锁）', 20, y + cardH / 2);
+          ctx.fillText('\uD83D\uDD12 ???（' + (reqD >= 900 ? '达成对应结局解锁' : '第 ' + reqD + ' 天解锁') + '）', 20, y + cardH / 2);
         }
-        y += cardH + 8;
+        y += cardH + 8; contentH += cardH + 8;
       }
-      y += 6;
+      y += 6; contentH += 6;
     }
     ctx.restore();
-    // 记录可滚动高度（供触摸滚动计算上限）
-    Game.logMaxScroll = Math.max(0, (y - top) - (bottom - top));
+    // V1.9修复: 滚动上限基于独立内容高计算（原用含 scrollY 的 y 计算，滚动后 maxScroll 被抵消，导致越滚越短、无法回看）
+    Game.logMaxScroll = Math.max(0, contentH - (bottom - top));
     drawTabBar(ctx, W, H);
   }
 

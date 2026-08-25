@@ -15,15 +15,17 @@
     doneBg: '#e8f0e0', lockedBg: '#EFEFEF', lockedBorder: '#CCCCCC', lockedText: '#AAAAAA'
   };
 
-  // 资源链：木材(1-3) / 食物(11-14) / 石料(21-23)，与网页版一致
+  // 资源链：木材(1-3) / 食物(11-14 椰系加工链) / 石料(21-23)，与网页版一致
+  // V1.9机制修复: 食物链语义自洽 —— 椰子→椰肉干(晒干)→椰油饼(压榨烤制)→炭烤椰排(火烤终极料理)
+  // 原「椰肉干→烤鱼→烤肉」逻辑断裂（椰肉干不会变成鱼/肉），且 emoji 错位（椰肉干用米饭🍚、烤肉用饼干🍪）
   var ITEMS = {
     1:  { name: '浮木',   em: '\uD83E\uDDEB', chain: 'wood',  lv: 1, next: 2  },
     2:  { name: '木板',   em: '\uD83F\uDFCB', chain: 'wood',  lv: 2, next: 3  },
     3:  { name: '木架',   em: '\uD83D\uDED6', chain: 'wood',  lv: 3, next: 0  },
     11: { name: '椰子',   em: '\uD83E\uDD65', chain: 'food',  lv: 1, next: 12 },
-    12: { name: '椰肉干', em: '\uD83C\uDF56', chain: 'food',  lv: 2, next: 13 },
-    13: { name: '烤鱼',   em: '\uD83D\uDC1F', chain: 'food',  lv: 3, next: 14 },
-    14: { name: '烤肉',   em: '\uD83C\uDF69', chain: 'food',  lv: 4, next: 0 }, // V1.2 新增
+    12: { name: '椰肉干', em: '\uD83C\uDF58', chain: 'food',  lv: 2, next: 13 },
+    13: { name: '椰油饼', em: '\uD83E\uDED3', chain: 'food',  lv: 3, next: 14 },
+    14: { name: '炭烤椰排', em: '\uD83C\uDF56', chain: 'food',  lv: 4, next: 0 }, // V1.2 新增（终极料理）
     21: { name: '石块',   em: '\uD83E\uDEA8', chain: 'stone', lv: 1, next: 22 },
     22: { name: '石斧',   em: '\uD83E\uDE93', chain: 'stone', lv: 2, next: 23 },
     23: { name: '铁镐',   em: '\u26CF\uFE0F', chain: 'stone', lv: 3, next: 0  }
@@ -131,7 +133,9 @@
   ];
 
   // 日记（小说体 · 鲁滨逊漂流风格，与玩法进度联动解锁，共 23 篇 / 5 章）
-  // req = 解锁所需「日记进度分」(diaryScore)；结局篇 req=999 仅由对应结局触发显式解锁
+  // V1.9机制修复: req = 解锁所需「累计生存天数」(totalDays)，故事跟随求生进度走、跨周目不倒退
+  // 原机制用「行为进度分」解锁（进游戏/建造/事件/椰子都加分），导致开局几分钟日记就跳到第4篇，与游戏天数严重脱节
+  // 结局篇 req=999 仅由对应结局触发显式解锁
   var LOGS = [
     { ch: 'ch1', title: '搁浅', text: '风暴撕碎了船帆，我被冲上这片无名礁岸。除了一身湿衣与几截浮木，我一无所有。' },
     { ch: 'ch1', title: '第一夜', text: '用浮木压住茅草，搭起第一个勉强遮风的窝棚。海风呜咽，我却第一次觉得——活着本身已是恩赐。' },
@@ -157,11 +161,11 @@
     { ch: 'ch5', title: '结局·新陆', text: '小舟顺流漂了数日，地平线终于隆起成陆。陌生的鸟鸣、陌生的风——又一场漂流，在另一片海岸重新开始。', req: 999, ending: 'end_explore' },
     { ch: 'ch5', title: '真结局·四象归一', text: '潮水数度涨落，我在岛上刻下的不只是年轮，还有四种活法。四象归一，荒岛不再是流放，而是一所学校。', req: 999, ending: 'true' }
   ];
-  // 给前面 18 篇补上 req（按章节递进，随玩法进度解锁）
-  LOGS[0].req = 0; LOGS[1].req = 0; LOGS[2].req = 1; LOGS[3].req = 2;
-  LOGS[4].req = 3; LOGS[5].req = 4; LOGS[6].req = 5; LOGS[7].req = 6;
-  LOGS[8].req = 7; LOGS[9].req = 8; LOGS[10].req = 9; LOGS[11].req = 10; LOGS[12].req = 11;
-  LOGS[13].req = 12; LOGS[14].req = 13; LOGS[15].req = 14; LOGS[16].req = 15; LOGS[17].req = 16;
+  // 给前面 18 篇补上 req（所需累计天数，按章节递进；前 2 篇开局即解锁）
+  LOGS[0].req = 0; LOGS[1].req = 0; LOGS[2].req = 2; LOGS[3].req = 3;
+  LOGS[4].req = 4; LOGS[5].req = 5; LOGS[6].req = 6; LOGS[7].req = 7;
+  LOGS[8].req = 8; LOGS[9].req = 9; LOGS[10].req = 10; LOGS[11].req = 11; LOGS[12].req = 12;
+  LOGS[13].req = 13; LOGS[14].req = 14; LOGS[15].req = 15; LOGS[16].req = 16; LOGS[17].req = 17;
 
   // 日记章节顺序（用于日记页分组渲染）
   var DIARY_CHAPTERS = [

@@ -60,9 +60,11 @@
     if (S.diary.indexOf(idx) < 0) S.diary.push(idx);
   }
   function recomputeDiary() {
+    // V1.9机制修复: 改为按「累计生存天数」解锁（故事跟随求生进度走，跨周目不倒退）
+    // 原按 diaryScore 行为分解锁，开局几分钟（进游戏+建1次+事件+椰子）就能跳到第4篇，与游戏天数严重脱节
     for (var i = 0; i < D.LOGS.length; i++) {
       var req = D.LOGS[i].req;
-      if (req !== undefined && req <= S.diaryScore) diaryUnlock(i);
+      if (req !== undefined && req <= S.totalDays) diaryUnlock(i);
     }
     S.diary.sort(function (a, b) { return a - b; });
   }
@@ -188,7 +190,7 @@
       S._sunnyGift = true;
       Game.FX.toast('晴天惊喜！下次采集体力 +1');
     }
-    addDiaryScore(1); // V1.8: 经历事件也推进日记
+    // V1.9机制修复: 事件不再直接推进日记（日记改由累计天数驱动，避免开局速通解锁）
     save();
     // 继续显示下一个事件
     if (idx + 1 < events.length) {
@@ -308,7 +310,6 @@
       S.board[pos] = result.id; // 同时作为食物留在棋盘
       Game.FX.floaty('\uD83E\uDD65 +' + gain + '体力', cx, cy);
       Game.FX.toast('发现椰果！体力 +' + gain);
-      addDiaryScore(1); // V1.8: 发现椰果解锁「椰林」篇
     } else {
       S.board[pos] = result.id;
       var toolLevel = getGatherLevel();
@@ -438,7 +439,7 @@
     if (st.unlocks && st.unlocks.indexOf('end_') === 0) {
       S.day++;
       S.totalBuilds++; S.totalDays++;
-      addDiaryScore(3);
+      recomputeDiary(); // V1.9: 天数推进后刷新日记解锁
       save();
       triggerEnding(st);
       return;
@@ -446,7 +447,7 @@
     // 非结局节点，增加天数
     S.day++;
     S.totalBuilds++; S.totalDays++;
-    addDiaryScore(1);
+    recomputeDiary(); // V1.9: 天数推进后刷新日记解锁
     save();
     // 天数过渡动画 → 营地升级光晕 → 提示
     Game.FX.dayTransition(S.day, function () {
@@ -454,7 +455,7 @@
       Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
     });
   }
-  // V1.2: 烹饪功能（2 食物 → 1 烤肉，+3 饱食）
+  // V1.2: 烹饪功能（2 椰肉干 → 1 炭烤椰排，+3 饱食）
   function cookFood() {
     // 消耗 2 个 L2 食物（12=椰肉干）
     var consumed = 0;
@@ -470,7 +471,7 @@
       Game.FX.toast('需要 2 个椰肉干才能烹饪！');
       return;
     }
-    // 获得 1 个烤肉
+    // 获得 1 个炭烤椰排（终极料理）
     var pos = firstEmpty();
     if (pos < 0) {
       // 退还材料
@@ -480,10 +481,10 @@
       Game.FX.toast('棋盘满了，先清空位置！');
       return;
     }
-    S.board[pos] = 14; // 烤肉
+    S.board[pos] = 14; // 炭烤椰排
     // 增加饱食度（V1.6: 工坊解锁后额外 +1）
     S.food = Math.min(S.maxFood, S.food + (S.craftBonus ? 4 : 3));
-    Game.FX.toast('\uD83D\uDD25 烹饪成功！烤肉 +3 饱食');
+    Game.FX.toast('\uD83D\uDD25 烹饪成功！炭烤椰排 +' + (S.craftBonus ? 4 : 3) + ' 饱食');
     save();
   }
 
@@ -800,8 +801,8 @@
     Game.scene = 'loading';
     Game.loadStart = Date.now();
     S.entered = true;
-    // V1.8: 进入即解锁日记前两篇（搁浅 / 第一夜）
-    if (S.diaryScore < 1) { S.diaryScore = 1; recomputeDiary(); }
+    // V1.9: 进入即按累计天数解锁前两篇（搁浅 / 第一夜，req=0 开局可得）
+    recomputeDiary();
     // 首次进入额外赠送体力（仅一次），让新用户多玩一会儿
     if (!S.welcomed) {
       S.maxEnergy += 10;
