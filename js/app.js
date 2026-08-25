@@ -152,7 +152,7 @@
     var wx = D.WEATHER;
     // 处理各事件选项
     if (cb === 'beast_fight') {
-      // 战斗：消耗 2 木
+      // 战斗：消耗 2 浮木
       var removed = 0;
       for (var i = S.space - 1; i >= 0 && removed < 2; i--) {
         if (S.board[i] === 1) { S.board[i] = 0; removed++; }
@@ -160,7 +160,18 @@
       if (removed >= 2) {
         Game.FX.toast('战斗胜利！消耗 2 浮木');
       } else {
-        Game.FX.toast('战斗中物资散落！');
+        // V1.10机制修复: 原「物资散落」无任何惩罚 = 战斗必胜（而逃跑必掉资源）→ 选项严重失衡
+        // 改为：没有武器(浮木)硬刚野兽 → 战斗失败，损失 2 个随机资源
+        var lostIdx = [];
+        for (var li = 0; li < S.space; li++) if (S.board[li]) lostIdx.push(li);
+        var lostCount = 0;
+        for (var lk = 0; lk < 2 && lostIdx.length > 0; lk++) {
+          var ri = Math.floor(Math.random() * lostIdx.length);
+          S.board[lostIdx[ri]] = 0;
+          lostIdx.splice(ri, 1);
+          lostCount++;
+        }
+        Game.FX.toast(lostCount > 0 ? ('赤手空拳，被野兽冲散！损失 ' + lostCount + ' 个资源') : '赤手空拳，所幸没丢东西');
       }
     } else if (cb === 'beast_flee') {
       // 逃跑：损失 1 随机资源
@@ -287,7 +298,8 @@
     r = (r - 0.1) / 0.9; // 重新映射剩余概率（成功路径内）
     if (r < p[0]) return { type: 'item', id: D.L1[Math.floor(Math.random() * 3)] }; // L1
     else if (r < p[0] + p[1]) return { type: 'item', id: D.L2_BONUS[Math.floor(Math.random() * 3)] }; // L2
-    else return { type: 'item', id: 3 }; // 木架（L3）
+    // V1.10机制修复: L3 档原固定返回木架(3)，导致「高品质」永远只有木头，食物/石链 L3 只能靠合成
+    else return { type: 'item', id: [3, 13, 23][Math.floor(Math.random() * 3)] }; // L3 三链随机
   }
   // V1.5: 计算本次采集空手率（受天气 / 版本影响）
   function computeMissRate() {
@@ -455,20 +467,23 @@
       Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
     });
   }
-  // V1.2: 烹饪功能（2 椰肉干 → 1 炭烤椰排，+3 饱食）
+  // V1.2/V1.9: 烹饪功能（2 椰油饼 → 1 炭烤椰排，+3/4 饱食）
+  // V1.10机制修复: ①原消耗 2 椰肉干(12) 是自动合成链(12→13→14 需 9 个 12)的 4.5 倍便宜，13 椰油饼形同虚设；
+  //              ②cookFood 从未导出到 App、渲染层无按钮 → 饱食度系统根本无法恢复（饥饿=体力上限减半且无解）
+  // 现改为消耗 2 个椰油饼(13) → 1 炭烤椰排(14)：13 成为必经材料、12 仅用于自动合成（不再被烹饪抢走）、比例仅略优于 3:1 合成
   function cookFood() {
-    // 消耗 2 个 L2 食物（12=椰肉干）
+    // 消耗 2 个 L3 食物（13=椰油饼）
     var consumed = 0;
     var consumedIdx = [];
     for (var i = S.space - 1; i >= 0 && consumed < 2; i--) {
-      if (S.board[i] === 12) { S.board[i] = 0; consumedIdx.push(i); consumed++; }
+      if (S.board[i] === 13) { S.board[i] = 0; consumedIdx.push(i); consumed++; }
     }
     if (consumed < 2) {
       // 退还已消耗的材料
       for (var j = 0; j < consumedIdx.length; j++) {
-        S.board[consumedIdx[j]] = 12;
+        S.board[consumedIdx[j]] = 13;
       }
-      Game.FX.toast('需要 2 个椰肉干才能烹饪！');
+      Game.FX.toast('需要 2 个椰油饼才能烹饪！');
       return;
     }
     // 获得 1 个炭烤椰排（终极料理）
@@ -476,7 +491,7 @@
     if (pos < 0) {
       // 退还材料
       for (var k = 0; k < consumedIdx.length; k++) {
-        S.board[consumedIdx[k]] = 12;
+        S.board[consumedIdx[k]] = 13;
       }
       Game.FX.toast('棋盘满了，先清空位置！');
       return;
@@ -1140,6 +1155,8 @@
     Game.FX.toast('\uD83D\uDD14 分享成功 +3 体力');
     save();
   };
+  // V1.10: 导出烹饪（此前 cookFood 未导出 → 渲染层无入口，饱食度无法恢复）
+  App.cookFood = cookFood;
 
   Game.App = App;
 })();

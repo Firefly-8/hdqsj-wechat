@@ -450,21 +450,28 @@
     btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83E\uDEB0 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
     hit(10 + gatherW + 6, ay, bottleW, 42, function () { Game.App.bottle(); });
 
-    // V1.5: 休息 + 分享按钮（替代广告按钮）
+    // V1.5: 休息 + 烹饪 + 分享按钮（V1.10: 补上烹饪入口 —— 此前 cookFood 无 UI，饱食度无法恢复）
     var ay2 = H - 64;
-    var btnW = (W - 20 - 6) / 2;
+    var btnGap = 6;
+    var btnW = (W - 20 - btnGap * 2) / 3;
     // 休息按钮：每小时3次，+2体力
     var restInfo = Game.App.getRestInfo ? Game.App.getRestInfo() : null;
     var restLeft = restInfo ? restInfo.left : 0;
     var canRest = restLeft > 0;
-    btn(ctx, 10, ay2, btnW, 28, canRest ? ('\uD83D\uDC4F 休息 +2 (' + restLeft + ')') : '\uD83D\uDC4F 休息冷却中', C.leaf, '#FFFFFF', canRest, pressed === 'rest', 8, 11);
+    btn(ctx, 10, ay2, btnW, 28, canRest ? ('\uD83D\uDC4F 休息 +2 (' + restLeft + ')') : '\uD83D\uDC4F 冷却中', C.leaf, '#FFFFFF', canRest, pressed === 'rest', 8, 11);
     hit(10, ay2, btnW, 28, function () { Game.App.onRest(); });
+    // 烹饪按钮：2 椰油饼 → 1 炭烤椰排 +饱食
+    var cookHave = Game.App.countItem ? Game.App.countItem(13) : 0;
+    var canCook = cookHave >= 2;
+    var hungry = fInfo && fInfo.isHungry;
+    btn(ctx, 10 + btnW + btnGap, ay2, btnW, 28, canCook ? ('\uD83D\uDD25 烹饪 (' + cookHave + ')') : (hungry ? '\uD83D\uDD25 饿！快去合成' : '\uD83D\uDD25 烹饪不足'), C.fire, '#FFFFFF', canCook, pressed === 'cook', 8, 11);
+    hit(10 + btnW + btnGap, ay2, btnW, 28, function () { Game.App.cookFood(); });
     // 分享按钮：每天10次，+3体力
     var shareInfo = Game.App.getShareInfo ? Game.App.getShareInfo() : null;
     var shareLeft = shareInfo ? shareInfo.left : 0;
     var canShare = shareLeft > 0;
-    btn(ctx, 10 + btnW + 6, ay2, btnW, 28, canShare ? ('\uD83D\uDD14 分享 +3 (' + shareLeft + ')') : '\uD83D\uDD14 今日次数用完', C.sea, '#FFFFFF', canShare, pressed === 'share', 8, 11);
-    hit(10 + btnW + 6, ay2, btnW, 28, function () { Game.App.onShare(); });
+    btn(ctx, 10 + (btnW + btnGap) * 2, ay2, btnW, 28, canShare ? ('\uD83D\uDD14 分享 +3 (' + shareLeft + ')') : '\uD83D\uDD14 已用完', C.sea, '#FFFFFF', canShare, pressed === 'share', 8, 11);
+    hit(10 + (btnW + btnGap) * 2, ay2, btnW, 28, function () { Game.App.onShare(); });
 
     // Tab 栏（棋盘/建造/日记）抽到公共函数，保证每个 tab 页都有底部导航
     drawTabBar(ctx, W, H);
