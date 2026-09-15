@@ -70,16 +70,17 @@
    var REWARD_UNIT = 'adunit-xxxxxxxxxxxxxxxx';  // 激励视频
    var BANNER_UNIT = 'adunit-yyyyyyyyyyyyyyyy';  // Banner（可选）
    ```
-3. 留空 = 演示模式（模拟确认框，与网页版一致）
+3. 留空 = 零广告模式（V1.14：漂流瓶捞完提示「明天再来」、离线弹窗只留「直接领取」，不向用户展示假广告；填入 ID 后 `AD.mode` 自动切 real，广告入口自动恢复）
 
 ## 自检脚本
 
-改完逻辑先跑这三套，全绿再进开发者工具：
+改完逻辑先跑这四套，全绿再进开发者工具：
 
 ```bash
 node _runtime_check.js   # 26 项：模块加载 / 主流程 / 各场景渲染 / 触摸命中
 node _audit_check.js     # 15 项：建造页可点性、弹窗回调、采集落点、资源扣除
 node _lore_check.js      # 22 项：原著改编层（V1.12/V1.13 彩蛋、两季、墨水、留痕）
+node _demo_gate_check.js # 4 项：零广告门闸（demo 不弹假广告、离线弹窗单按钮）
 ```
 
 ## 上线前待调项

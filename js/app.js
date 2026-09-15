@@ -837,6 +837,9 @@
     // V1.8审查修复: 采集动画进行中禁止漂流瓶，避免 2.4s 后落子时覆盖刚开出的格子
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) { Game.FX.toast('采集中，请稍候'); return; }
     if (S.bottle <= 0) {
+      // V1.14: MVP 零广告上线——demo 模式不弹假广告，改提示明日再来
+      // （UV≥1000 开通流量主、ad.js 填入真实广告位 ID 后 AD.mode 自动切 real，此入口自动恢复）
+      if (Game.AD.mode === 'demo') { Game.FX.toast('今日漂流瓶已捞完，明天再来'); return; }
       Game.FX.toast('今日漂流瓶已捞完，看广告可多捞');
       Game.AD.showReward('bottle', function () { grantAd('bottle'); });
       return;
@@ -1056,13 +1059,17 @@
       Game.scene = 'game';
       // 加载完成后再弹离线/首玩引导，避免盖在 loading 之上
       if (S.offlineUnclaimed && S._offlineReward > 0) {
+        // V1.14: MVP 零广告上线——demo 模式隐藏「看广告翻倍」，只留直接领取
+        var offlineBtns = [
+          { label: '直接领取', primary: false, cb: function () { closeModal(); grantOffline(S._offlineReward); triggerDailyEvent(); } }
+        ];
+        if (Game.AD.mode === 'real') {
+          offlineBtns.unshift({ label: '看广告翻倍', primary: true, cb: function () { closeModal(); Game.AD.showReward('offline', function () { grantAd('offline'); triggerDailyEvent(); }); } });
+        }
         openModal({
           title: '\uD83C\uDF0A \u6B22\u8FCE\u56DE\u5230\u8352\u5C9B', // V1.11: 修「茍岛」错字（\u830D → \u8352 荒）
           body: '你离开了 ' + Math.floor(S._offlineSec / 60) + ' 分钟\n营地为你攒下了 ' + S._offlineReward + ' 个资源',
-          buttons: [
-            { label: '直接领取', primary: false, cb: function () { closeModal(); grantOffline(S._offlineReward); triggerDailyEvent(); } },
-            { label: '看广告翻倍', primary: true, cb: function () { closeModal(); Game.AD.showReward('offline', function () { grantAd('offline'); triggerDailyEvent(); }); } }
-          ]
+          buttons: offlineBtns
         });
       } else if (S.stages.indexOf(1) < 0 && S.day === 1) {
         Game.FX.toast('\u70B9\u91C7\u96C6\u6536\u96C6\u8D44\u6E90\uFF0C3\u4E2A\u540C\u7C7B\u81EA\u52A8\u5408\u6210\u5347\u7EA7');
