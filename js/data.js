@@ -257,11 +257,23 @@
   var SEASON_DAYS = 10; // 每 10 天换一季
 
   // 原著细节事件（均为公版，可自由使用）
+  // V1.13 扩容：专挑原著里「教材不讲、读者容易跳过」的细节
   var LORE_EVENTS = [
+    {
+      id: 'treenight',
+      dayMin: 2, once: true,
+      // 原著：上岸第一夜他爬上一棵树睡，通宵下雨却酣睡未醒
+      title: '\uD83C\uDF33 树上的第一夜',
+      body: '你忽然想起上岸那晚：天黑了没处睡，只好爬上一棵树。\n那雨下了一整夜，你居然睡得很沉。',
+      options: [
+        { label: '现在想起来，有点想笑', primary: true, cb: 'lore_treenight' },
+        { label: '那时候是真怕', primary: false, cb: 'lore_treenight2' }
+      ]
+    },
     {
       id: 'parrot',
       dayMin: 3, once: true,
-      title: '\uD83E\uDD9C 一只小鹦鹉', // 原著：他捉到一只小鹦鹉，起名 Poll
+      title: '\uD83E\uDD9C 一只小鹦鹉', // 原著：他捉到一只小鹦鹉，起名 Poll，陪了他 26 年
       body: '林子里捡到一只羽翼未丰的小鹦鹉，它歪着头看你，像是在等一个名字。',
       options: [
         { label: '叫它 Poll', primary: true, cb: 'lore_parrot' },
@@ -271,7 +283,8 @@
     {
       id: 'bigcanoe',
       dayMin: 5, once: true,
-      title: '\uD83C\uDF32 一棵巨杉', // 原著：第6年砍倒大树造独木舟，花五六个月，太重拖不下海，前功尽弃
+      // 原著：第6年砍倒大树造独木舟，花五六个月，太重拖不下海，前功尽弃
+      title: '\uD83C\uDF32 一棵巨杉',
       body: '岛心立着一棵巨杉，树干粗得两人合抱。造一条能远航的大独木舟，一直是你心里那根刺。',
       options: [
         { label: '砍倒它，造大船', primary: true, cb: 'lore_bigcanoe' },
@@ -279,15 +292,103 @@
       ]
     },
     {
+      id: 'husks',
+      dayMin: 7, once: true,
+      // 原著：他抖空一个装谷物的旧口袋，谷壳落在墙根，一个月后长出大麦与稻苗——种植是意外开始的
+      title: '\uD83C\uDF3E 口袋里的谷壳',
+      body: '你抖空一个装过谷物的旧口袋，尘土和谷壳落在墙根，没在意。\n——一个月后，那地方冒出了绿芽。',
+      options: [
+        { label: '蹲下看看是什么', primary: true, cb: 'lore_husks' },
+        { label: '当杂草，没管它', primary: false, cb: 'lore_husks_skip' }
+      ]
+    },
+    {
       id: 'footprint',
       dayMin: 9, once: true,
-      title: '\uD83D\uDC63 沙滩上的脚印', // 原著：约第17年发现脚印，惊恐万分
+      // 原著：约第17年发现脚印，随后找到人骨与生火痕迹
+      title: '\uD83D\uDC63 沙滩上的脚印',
       body: '退潮后的湿沙上，清清楚楚一个脚印——不是你的。你左右张望，只有浪声。',
       options: [
         { label: '追查脚印', primary: true, cb: 'lore_footprint' },
         { label: '当作没看见', primary: false, cb: 'lore_footprint_skip' }
       ]
+    },
+    {
+      id: 'oldgoat',
+      dayMin: 11, once: true,
+      // 原著：他最早驯养的那只老山羊死了，他费劲把它拖出去，就地挖坑体面地埋了
+      title: '\uD83D\uDC10 老山羊',
+      body: '你最早驯养的那只老山羊，今早没能站起来。\n它跟着你的年头，比谁都长。',
+      options: [
+        { label: '抬出去埋了', primary: true, cb: 'lore_oldgoat_bury' },
+        { label: '剥下皮，留着用', primary: false, cb: 'lore_oldgoat_skin' }
+      ]
+    },
+    {
+      id: 'seafire',
+      dayMin: 13, once: true,
+      // 原著：他听见海上炮响，爬上山顶点起大火，船也回了两炮；天亮雾散，那是一条卡在礁上的残骸，
+      //       他始终不知道有没有船员获救
+      title: '\uD83D\uDD25 海上的火光',
+      body: '天没亮，远处海上传来一声闷响，像炮。\n你想爬上山顶点一堆火——可你只有一次机会。',
+      options: [
+        { label: '爬上山顶点火', primary: true, cb: 'lore_seafire' },
+        { label: '先看清是什么再说', primary: false, cb: 'lore_seafire_skip' }
+      ]
+    },
+    {
+      id: 'cats',
+      dayMin: 15, once: true,
+      // 原著：船上的两只猫繁殖太快，他被迫杀掉或赶进林子，只留两三只最喜欢的
+      title: '\uD83D\uDC08 它们太多了',
+      body: '船上带来的两只猫生了一窝又一窝，粮仓被翻得底朝天。',
+      options: [
+        { label: '留两只，其余赶进林子', primary: true, cb: 'lore_cats_keep2' },
+        { label: '一只不留，全赶走', primary: false, cb: 'lore_cats_none' }
+      ]
+    },
+    {
+      id: 'coins',
+      dayMin: 17, once: true,
+      // 原著：一具水手男孩的尸体被冲上岸，口袋里只有两枚金币和一只烟斗——他看重烟斗远胜过金币
+      title: '\uD83D\uDCB0 两枚金币',
+      body: '一具男孩的尸体被浪冲上岸。口袋里只有两枚金币，\n和一只旧烟斗。',
+      options: [
+        { label: '拿走烟斗，金币留给他', primary: true, cb: 'lore_coins_pipe' },
+        { label: '两样都拿走', primary: false, cb: 'lore_coins_all' }
+      ]
+    },
+    {
+      id: 'dogo',
+      dayMin: 20, once: true,
+      // 原著原句：狗活到19岁，其中16年陪着他，最后「单纯因为衰老而死」
+      title: '\uD83D\uDC15 它老了',
+      body: '它趴在窝边，一整天没动。\n你叫它，它抬了抬头，尾巴轻轻扫了一下。',
+      options: [
+        { label: '蹲下来，陪它到天黑', primary: true, cb: 'lore_dog_stay' },
+        { label: '别看了，去干活', primary: false, cb: 'lore_dog_leave' }
+      ]
     }
+  ];
+
+  // V1.13 原著彩蛋：墨水会用完
+  // 原著：他带回钢笔、墨水、纸写日记，却「想不出任何方法制造墨水」；
+  //       墨水快干时他往里兑水，直到写出来的字自己都认不清；此后只记大事，其余刻在木头上。
+  // 按已解锁日记篇数分三段，挂在日记页顶部（与「木刻记日」形成呼应：写不成了，就改成刻）。
+  var INK_STAGES = [
+    { min: 0,  text: '桌上还有小半瓶墨水，够我写一阵子。' },
+    { min: 8,  text: '墨水见了底。我往里兑了水，写出来的字自己都认不清。' },
+    { min: 16, text: '墨水用完了，再也造不出来。往后只能刻在木头上——大事才刻。' }
+  ];
+
+  // V1.13 原著彩蛋：他自嘲「既是个蹩脚的木工，也是个蹩脚的裁缝」
+  // 用于替换单调的「资源不足」提示
+  var SORRY_LINES = [
+    '料还不够，先攒着。',
+    '不够。这木工活，我干得笨手笨脚。',
+    '料不够。一根木桩砍好再搬回来，我得花上两天。',
+    '差料。裁缝活做不好，木工活也一样。',
+    '材料还差。有的事除了耐心，没有别的办法。'
   ];
 
   globalThis.Game = globalThis.Game || {};
@@ -301,6 +402,8 @@
     BG_IMG: BG_IMG, WEATHER: WEATHER, EVENTS: EVENTS,
     // V1.12 原著改编层
     CASTAWAY_DATE: CASTAWAY_DATE, NOTCH_RULE: NOTCH_RULE, ISLAND_NAME: ISLAND_NAME,
-    SEASONS: SEASONS, SEASON_DAYS: SEASON_DAYS, LORE_EVENTS: LORE_EVENTS
+    SEASONS: SEASONS, SEASON_DAYS: SEASON_DAYS, LORE_EVENTS: LORE_EVENTS,
+    // V1.13 原著细节扩容
+    INK_STAGES: INK_STAGES, SORRY_LINES: SORRY_LINES
   };
 })();

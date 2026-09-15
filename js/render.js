@@ -788,6 +788,33 @@
       y += panelH + 8; contentH += panelH + 8;
     }
 
+    // V1.13 原著彩蛋：墨水会用完
+    // 原著里他带回了钢笔与墨水，却「想不出任何办法制造墨水」；快干时往里兑水，
+    // 直到写出来的字自己都认不清。此后只记大事，其余刻在木头上 —— 正好接上「木刻记日」。
+    var ink = Game.App.getInkInfo ? Game.App.getInkInfo() : null;
+    if (ink) {
+      var inkStyle = [
+        { bar: '#8B5E3C', bg: C.paper2,   fg: C.ink     },
+        { bar: '#C08A3E', bg: '#F7EEDC',  fg: '#8A6A3B' },
+        { bar: '#A33B2E', bg: '#F7E4E0',  fg: '#A33B2E' }
+      ][ink.stage] || { bar: '#8B5E3C', bg: C.paper2, fg: C.ink };
+      ctx.font = (ink.empty ? 'bold ' : '') + '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      var inkLines = wrapText(ctx, '\uD83D\uDDB5 ' + ink.text, W - 44);
+      var inkH = 18 + inkLines.length * 13;
+      ctx.fillStyle = inkStyle.bg;
+      roundRect(ctx, 10, y, W - 20, inkH, 8);
+      ctx.fill();
+      ctx.fillStyle = inkStyle.bar;
+      ctx.fillRect(10, y, 4, inkH); // 左侧色条：随墨水见底由棕转红
+      ctx.fillStyle = inkStyle.fg;
+      for (var il = 0; il < inkLines.length; il++) {
+        ctx.fillText(inkLines[il], 22, y + 16 + il * 13);
+      }
+      y += inkH + 8; contentH += inkH + 8;
+    }
+
     for (var c = 0; c < chaps.length; c++) {
       var chId = chaps[c].id;
       var anyUnlocked = false;
@@ -837,6 +864,32 @@
         y += cardH + 8; contentH += cardH + 8;
       }
       y += 6; contentH += 6;
+    }
+
+    // V1.13 原著彩蛋：岛上留痕
+    // 日记记的是「发生了什么」，这块记的是「你做过什么选择」——
+    // 每条都对应原著里一个容易被漏掉的细节，没选过就不出现。
+    var traces = Game.App.getTraces ? Game.App.getTraces() : [];
+    if (traces.length > 0) {
+      var trH = 26 + traces.length * 15;
+      ctx.fillStyle = C.paper2;
+      roundRect(ctx, 10, y, W - 20, trH, 10);
+      ctx.fill();
+      ctx.strokeStyle = C.wood;
+      ctx.lineWidth = 1;
+      roundRect(ctx, 10, y, W - 20, trH, 10);
+      ctx.stroke();
+      ctx.fillStyle = C.wood;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('\uD83D\uDC3E 岛上留痕', 20, y + 17);
+      ctx.fillStyle = C.ink;
+      ctx.font = '10px sans-serif';
+      for (var ti = 0; ti < traces.length; ti++) {
+        ctx.fillText(traces[ti], 20, y + 32 + ti * 15);
+      }
+      y += trH + 8; contentH += trH + 8;
     }
     ctx.restore();
     // V1.9修复: 滚动上限基于独立内容高计算（原用含 scrollY 的 y 计算，滚动后 maxScroll 被抵消，导致越滚越短、无法回看）

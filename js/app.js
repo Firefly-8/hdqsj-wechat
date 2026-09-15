@@ -49,7 +49,9 @@
       // V1.11: 休息额度显式初始化
       _restCount: 3, _lastRest: 0,
       // V1.12 原著改编层：一次性事件记录 / 鹦鹉 Poll / 巨杉独木舟的教训
-      eventsSeen: [], parrot: false, canoeLesson: false
+      eventsSeen: [], parrot: false, canoeLesson: false,
+      // V1.13 原著细节彩蛋：烟斗 / 金币 / 赶走猫 / 埋了狗
+      pipe: false, coins: false, noCats: false, dogBuried: false
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -314,6 +316,66 @@
       autoMerge();
     } else if (cb === 'lore_footprint_skip') {
       Game.FX.toast('你把沙子抹平，可那天夜里没睡着');
+    } else if (cb === 'lore_treenight' || cb === 'lore_treenight2') {
+      // V1.13 原著：上岸第一夜爬上一棵树睡，通宵下雨却酣睡未醒
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + 1);
+      Game.FX.toast(cb === 'lore_treenight'
+        ? '那时候淋着雨都睡得着。\n现在你比那会儿强多了。体力 +1'
+        : '怕，但天亮了。\n你活了下来的这件事，本身就值得高兴。体力 +1');
+    } else if (cb === 'lore_husks') {
+      // V1.13 原著：抖空装谷物的口袋，谷壳落在墙根，一个月后长出大麦与稻苗——种植是意外开始的
+      var gp = firstEmpty();
+      if (gp >= 0) {
+        S.board[gp] = 11;
+        Game.FX.toast('是麦子和稻子。\n你没种过地，它们是自个儿长出来的。\n你把穗子留了下来');
+        autoMerge();
+      } else {
+        Game.FX.toast('是麦子和稻子——\n可惜背筐满了，穗子没处放');
+      }
+    } else if (cb === 'lore_husks_skip') {
+      Game.FX.toast('你当杂草清掉了。\n多年后你才知道，那一把是口粮的祖宗');
+    } else if (cb === 'lore_oldgoat_bury') {
+      // V1.13 原著：他把那只老山羊费劲拖出去，就地挖坑体面地埋了
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + 1);
+      Game.FX.toast('你费了不少劲才把它拖出去，\n在它倒下的地方挖了坑。\n它陪你的年头，比岛上任何东西都长');
+    } else if (cb === 'lore_oldgoat_skin') {
+      // 原著里他也保存过猎物的皮（打死的野猫「肉一点用处也没有，保存下了皮」）
+      var sp = firstEmpty();
+      if (sp >= 0) {
+        S.board[sp] = 2; // 皮革折算为木板链，抽象表示「有用的材料」
+        Game.FX.toast('皮留下了，肉没用。\n在这里，活下去比体面要紧');
+        autoMerge();
+      } else {
+        Game.FX.toast('背筐满的，皮没处收');
+      }
+    } else if (cb === 'lore_seafire') {
+      // V1.13 原著：他燃起大火，船也回了两炮；天亮雾散，那是一条卡在礁上的残骸，
+      //            他始终不知道有没有船员获救 —— 忠实还原这个「无从得知」的结局
+      S.energy = Math.max(0, S.energy - 2);
+      Game.FX.toast('你爬上山点着了火。\n雾里回了两声炮响，像是应答。\n天亮雾散——那是一条卡在礁上的破船。\n有没有人活着，你永远不会知道。\n体力 -2');
+    } else if (cb === 'lore_seafire_skip') {
+      Game.FX.toast('雾散了，海上什么都没有。\n也许那只是雷');
+    } else if (cb === 'lore_cats_keep2') {
+      // V1.13 原著：猫繁殖太快，他被迫杀掉或赶进林子，只留两三只最喜欢的
+      S.food = Math.max(0, S.food - 1);
+      Game.FX.toast('你留下两只，其余的都赶进了林子。\n粮仓终于保住了。饱食 -1');
+    } else if (cb === 'lore_cats_none') {
+      S.noCats = true;
+      Game.FX.toast('一只不留。\n粮仓保住了，可屋里静得能听见海');
+    } else if (cb === 'lore_coins_pipe') {
+      // V1.13 原著：男孩口袋里只有两枚金币和一只烟斗，他把烟斗看得远比金币重
+      S.pipe = true;
+      Game.FX.toast('你把烟斗塞进口袋，觉得自己像个人了。\n金币留在他身边——\n在这座岛上，两枚金币买不到一粒米');
+    } else if (cb === 'lore_coins_all') {
+      S.pipe = true; S.coins = true;
+      Game.FX.toast('金币你也收进了箱底。\n明知它买不到一粒米，\n你还是收着——这大概就是人。');
+    } else if (cb === 'lore_dog_stay') {
+      // V1.13 原著原句：狗活到十九岁，其中十六年陪着他，最后「单纯因为衰老而死」
+      S.dogBuried = true;
+      Game.FX.toast('它在你手边睡着了，再没醒。\n它活了十九岁，十六年跟着你。\n你挖了个坑，就埋在它倒下的地方');
+    } else if (cb === 'lore_dog_leave') {
+      S.dogBuried = true;
+      Game.FX.toast('你转身去干活了。\n回来时它已经硬了。\n你有点后悔没多陪它一会儿');
     }
     // V1.9机制修复: 事件不再直接推进日记（日记改由累计天数驱动，避免开局速通解锁）
     save();
@@ -543,8 +605,18 @@
       Game.FX.toast('需先完成上一级科技');
       return;
     }
+    // V1.13 原著彩蛋：原文里他自嘲「既是个蹩脚的木工，也是个蹩脚的裁缝」
+    // 把单调的「资源不足」换成带自嘲的口吻，但保留「还差什么」的信息量
+    var shortList = [];
     for (var id in st.need) {
-      if (countItem(+id) < st.need[id]) { Game.FX.toast('资源不足'); return; }
+      if (countItem(+id) < st.need[id]) {
+        shortList.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + ' \u00D7' + (st.need[id] - countItem(+id)));
+      }
+    }
+    if (shortList.length > 0) {
+      var sorry = D.SORRY_LINES[Math.floor(Math.random() * D.SORRY_LINES.length)];
+      Game.FX.toast(sorry + '\n还差：' + shortList.join('\u3001'));
+      return;
     }
     for (var id2 in st.need) {
       var n = st.need[id2];
@@ -1334,6 +1406,29 @@
     };
   };
   App.hasParrot = function () { return !!S.parrot; };
+
+  // V1.13 原著细节彩蛋：墨水会用完
+  // 原著：他带回钢笔、墨水、纸写日记，却「想不出任何办法制造墨水」；
+  //       墨水快干时往里兑水，直到字自己都认不清；此后只记大事，其余刻在木头上。
+  // 按已解锁日记篇数分三段，挂在日记页顶部 —— 与「木刻记日」形成呼应：写不成了，就改成刻。
+  App.getInkInfo = function () {
+    var stages = D.INK_STAGES, n = S.diary.length, idx = 0;
+    for (var i = 0; i < stages.length; i++) if (n >= stages[i].min) idx = i;
+    return { stage: idx, text: stages[idx].text, empty: idx >= stages.length - 1, chapters: n };
+  };
+
+  // V1.13 原著细节彩蛋：你这局在岛上留下的痕迹（日记页末尾回望）
+  // 每一条都对应原著里一个容易被漏掉的动作，只有真选了才会出现。
+  App.getTraces = function () {
+    var out = [];
+    if (S.parrot) out.push('\uD83E\uDD9C 一只叫 Poll 的鹦鹉，还在学舌');
+    if (S.canoeLesson) out.push('\uD83C\uDF32 岛心那棵巨杉倒着，独木舟拖不下海');
+    if (S.pipe) out.push('\uD83D\uDEAC 口袋里有一只烟斗，睡前摸一摸');
+    if (S.coins) out.push('\uD83D\uDCB0 箱底压着两枚金币，买不到一粒米');
+    if (S.noCats) out.push('\uD83D\uDC08 猫一只没留，屋里静得能听见海');
+    if (S.dogBuried) out.push('\uD83D\uDC15 门口那个窝还空着');
+    return out;
+  };
 
   Game.App = App;
 })();
