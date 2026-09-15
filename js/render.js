@@ -106,7 +106,7 @@
     ctx.font = 'bold 34px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('荒岛求生记', W / 2, H * 0.15);
+    ctx.fillText('绝望岛求生记', W / 2, H * 0.15);
     ctx.shadowBlur = 4;
     ctx.font = '13px sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -217,7 +217,7 @@
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('\uD83C\uDFDD 荒岛求生记', 14, 22);
+    ctx.fillText('\uD83C\uDFDD 绝望岛求生记', 14, 22);
     // V1.1: 天气显示（右侧）
     var wInfo = Game.App.getWeatherInfo ? Game.App.getWeatherInfo() : null;
     var weatherText = wInfo ? (wInfo.em + ' ' + wInfo.name) : '';
@@ -227,13 +227,14 @@
     if (fInfo && fInfo.isHungry) foodText = '\uD83D\uDC94 饥饿'; // 饿肚子时显示警告
     ctx.textAlign = 'right';
     ctx.font = '12px sans-serif';
-    ctx.fillText('第 ' + S.day + ' 天 ' + weatherText, W - 14, 22);
-    // 第二行：饱食度
-    if (foodText) {
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : '#FFFFFF';
-      ctx.fillText(foodText, W - 14, 36);
-    }
+    // V1.12: 顶栏加显季节（原著两季：旱季 / 雨季）
+    var sInfo = Game.App.getSeasonInfo ? Game.App.getSeasonInfo() : null;
+    var seasonText = sInfo ? (' \u00B7 ' + sInfo.em + sInfo.name) : '';
+    ctx.fillText('第 ' + S.day + ' 天' + seasonText, W - 14, 22);
+    // 第二行：天气 + 饱食度（V1.12: 天气由第一行下移至此，给季节让位）
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : '#FFFFFF';
+    ctx.fillText(weatherText + (foodText ? '  ' + foodText : ''), W - 14, 36);
     hit(W - 90, 0, 90, 44, function () { Game.App.backHome(); });
 
     // 营地标签（含升级光晕动画）；海洋区蓝色底仅在背景图未加载时兜底
@@ -694,6 +695,41 @@
   }
 
   // ============ 日记 tab（V1.8 小说体 · 章节分组 + 滚动 + 多行） ============
+  // V1.12 原著彩蛋：木刻记日刻度尺
+  // 原著中他在方柱四边每天刻一个凹口，每 7 天刻一个长一倍的，每月第一天再长一倍，以此当历书。
+  function drawNotchRuler(ctx, x, y, w, day, week, month) {
+    var C = Game.DATA.C;
+    var postH = 16;
+    // 木柱
+    ctx.fillStyle = C.wood;
+    roundRect(ctx, x, y, w, postH, 3);
+    ctx.fill();
+    // 刻痕：自左向右按天排列，长度按 7 天 / 30 天规则加倍
+    var per = 4;                            // 每天占 4px
+    var cap = Math.floor((w - 14) / per);   // 可容纳的天数
+    var start = day > cap ? (day - cap + 1) : 1;
+    ctx.strokeStyle = C.sand;
+    ctx.lineWidth = 1;
+    for (var d = start; d <= day; d++) {
+      var len = 5;                          // 每日凹口
+      if (d % month === 0) len = 11;        // 每月第一天再长一倍
+      else if (d % week === 0) len = 8;     // 每 7 天加倍
+      var cx = x + 7 + (d - start) * per + per / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, y + (postH - len) / 2);
+      ctx.lineTo(cx, y + (postH + len) / 2);
+      ctx.stroke();
+    }
+    // 天数超过可容纳时，左侧留提示：这里只是「最近 N 天」
+    if (start > 1) {
+      ctx.fillStyle = C.paper3;
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u00B7\u00B7\u00B7', x + 1, y + postH / 2);
+    }
+  }
+
   function drawLog(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
@@ -722,6 +758,36 @@
     var logs = D.LOGS, chaps = D.DIARY_CHAPTERS;
     var y = top - (Game.logScrollY || 0);
     var contentH = 0; // V1.9修复: 独立累计内容高（不随 scrollY 偏移），供滚动上限计算
+
+    // V1.12 原著彩蛋：木刻记日面板（置顶，随内容一起滚动）
+    var notch = Game.App.getNotchInfo ? Game.App.getNotchInfo() : null;
+    if (notch) {
+      var panelH = 64;
+      ctx.fillStyle = C.paper2;
+      roundRect(ctx, 10, y, W - 20, panelH, 10);
+      ctx.fill();
+      ctx.strokeStyle = C.wood;
+      ctx.lineWidth = 1;
+      roundRect(ctx, 10, y, W - 20, panelH, 10);
+      ctx.stroke();
+      ctx.fillStyle = C.ink;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('\uD83E\uDEB5 木刻记日', 20, y + 17);
+      ctx.textAlign = 'right';
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = C.wood;
+      ctx.fillText('第 ' + notch.day + ' 天 \u00B7 ' + notch.startDate + ' 上岸', W - 20, y + 17);
+      drawNotchRuler(ctx, 20, y + 30, W - 40, notch.day, notch.week, notch.month);
+      ctx.fillStyle = C.paper3;
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('每 7 天长一倍，每月再长一倍 \u2014\u2014 这是我的历书', 20, y + 57);
+      y += panelH + 8; contentH += panelH + 8;
+    }
+
     for (var c = 0; c < chaps.length; c++) {
       var chId = chaps[c].id;
       var anyUnlocked = false;
@@ -888,7 +954,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 26px sans-serif';
-    ctx.fillText('荒岛求生记', W / 2, ty);
+    ctx.fillText('绝望岛求生记', W / 2, ty);
     ctx.font = '14px sans-serif';
     ctx.fillStyle = 'rgba(74,52,40,0.85)';
     ctx.fillText('漂流中…', W / 2, ty + 30);

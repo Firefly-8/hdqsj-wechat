@@ -47,7 +47,9 @@
       // V1.11: 科技树解锁标记显式初始化（原为 undefined，靠 falsy 侥幸工作）
       craftBonus: false, gatherBonus: false, bottleBonus: false,
       // V1.11: 休息额度显式初始化
-      _restCount: 3, _lastRest: 0
+      _restCount: 3, _lastRest: 0,
+      // V1.12 原著改编层：一次性事件记录 / 鹦鹉 Poll / 巨杉独木舟的教训
+      eventsSeen: [], parrot: false, canoeLesson: false
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -86,20 +88,35 @@
       S.bottle = D.DAILY_BOTTLE + (S.bottleBonus ? 1 : 0); // V1.6: 海图解锁后每日 +1
     }
   }
+  // V1.12 原著改编层：两季（旱季 / 雨季）
+  // 原著中笛福写他观察到岛上只有两季、与温带四季不同。此处由本周目生存天数推导，无需额外存档字段。
+  function getSeasonInfo() {
+    var idx = Math.floor((Math.max(1, S.day) - 1) / D.SEASON_DAYS) % D.SEASONS.length;
+    return D.SEASONS[idx];
+  }
+  // 季节对天气概率的偏置：雨季多雨多风暴，旱季多晴
+  function weatherProbAt(i) {
+    var base = D.WEATHER[i].prob;
+    if (getSeasonInfo().id === 1) {   // 雨季
+      if (i === 1) base *= 1.6;       // 雨天
+      if (i === 2) base *= 1.8;       // 风暴
+    } else {                          // 旱季
+      if (i === 0) base *= 1.35;      // 晴天
+    }
+    return base;
+  }
   // V1.1: 每日天气刷新
   function dailyWeatherReset() {
     var today = new Date().toDateString();
     if (S.weatherDate !== today) {
       S.weatherDate = today;
-      // 按概率随机天气
-      var r = Math.random();
-      var cum = 0;
-      for (var i = 0; i < D.WEATHER.length; i++) {
-        cum += D.WEATHER[i].prob;
-        if (r < cum) {
-          S.weather = D.WEATHER[i].type;
-          break;
-        }
+      // V1.12: 改为按季节偏置后的概率随机（原为固定 prob），并归一化取累积
+      var probs = [], total = 0, i;
+      for (i = 0; i < D.WEATHER.length; i++) { var p = weatherProbAt(i); probs.push(p); total += p; }
+      var r = Math.random() * total, cum = 0;
+      for (i = 0; i < D.WEATHER.length; i++) {
+        cum += probs[i];
+        if (r < cum) { S.weather = D.WEATHER[i].type; break; }
       }
     }
   }
@@ -140,16 +157,44 @@
     }
     return D.WEATHER[0];
   }
+  // V1.12: 原著细节事件池（一次性，按天数控时出现）
+  function loreEventPool() {
+    var out = [];
+    for (var i = 0; i < D.LORE_EVENTS.length; i++) {
+      var ev = D.LORE_EVENTS[i];
+      if (S.eventsSeen && S.eventsSeen.indexOf(ev.id) >= 0) continue;
+      if (S.day < (ev.dayMin || 0)) continue;
+      out.push(ev);
+    }
+    return out;
+  }
   // V1.1: 触发每日随机事件
   function triggerDailyEvent() {
     if (S.eventDone || S.day < 2) return; // 第1天不触发
-    // 随机选择 1-2 个事件
-    var eventCount = Math.random() < 0.3 ? 2 : 1;
-    var shuffled = D.EVENTS.slice().sort(function () { return Math.random() - 0.5; });
+    // V1.12: 原著事件一次性、错过不再 —— 满足条件时优先弹（命中率 60%）
+    var lore = loreEventPool();
+    var useLore = lore.length > 0 && Math.random() < 0.6;
+    var pool = useLore ? lore : D.EVENTS.slice();
+    // 随机选择 1-2 个事件（原著事件一次只弹一个，避免挤掉主线事件）
+    var eventCount = useLore ? 1 : (Math.random() < 0.3 ? 2 : 1);
+    var shuffled = pool.slice().sort(function () { return Math.random() - 0.5; });
     var selected = shuffled.slice(0, eventCount);
+    // 标记原著事件已出现（once 语义）
+    if (!S.eventsSeen) S.eventsSeen = [];
+    for (var k = 0; k < selected.length; k++) {
+      if (selected[k].once && S.eventsSeen.indexOf(selected[k].id) < 0) S.eventsSeen.push(selected[k].id);
+    }
     S.eventDone = true;
+    save(); // V1.12: eventsSeen 已变更，需落盘（原实现此处不存）
     // 逐个弹事件（第一个弹完后再弹第二个）
     showNextEvent(selected, 0);
+    // V1.12 彩蛋：养了 Poll 之后，它偶尔学舌
+    if (S.parrot && Math.random() < 0.35) {
+      var sayings = ['Poll！', '蠢东西！', '别爬那棵树！', '今天没饭吃。', '回英国去。'];
+      setTimeout(function () {
+        Game.FX.toast('\uD83E\uDD9C Poll 叫了一声：' + sayings[Math.floor(Math.random() * sayings.length)]);
+      }, 900);
+    }
   }
   function showNextEvent(events, idx) {
     if (idx >= events.length) return;
@@ -231,6 +276,44 @@
       // V1.11: 文案原写「体力 +1」，但实现是「免消耗 1 点」，两者不等价（体力已满时前者仍有收益、后者没有）
       S._sunnyGift = true;
       Game.FX.toast('晴天惊喜！下次采集不耗体力');
+    } else if (cb === 'lore_parrot') {
+      // V1.12 原著：他捉到一只小鹦鹉，起名叫 Poll
+      S.parrot = true;
+      Game.FX.toast('\uD83E\uDD9C Poll 落到你肩上，从此营地里多了个学舌的');
+    } else if (cb === 'lore_parrot_skip') {
+      Game.FX.toast('你松开手，它扑腾两下飞进林子');
+    } else if (cb === 'lore_bigcanoe') {
+      // V1.12 原著（第6年）：他砍倒大树、花五六个月造出独木舟，却因太重拖不下海，前功尽弃
+      // 忠实还原「失败即内容」：材料全损（不退还），但留下教训 → 之后采集空手率降低
+      var needWood = 2, needRack = 1;
+      if (countItem(2) < needWood || countItem(3) < needRack) {
+        Game.FX.toast('木板 ×' + needWood + '、木架 ×' + needRack + ' 才够开工，先攒齐再来');
+      } else {
+        var cut = 0, need = needWood;
+        for (var bi = S.space - 1; bi >= 0 && need > 0; bi--) {
+          if (S.board[bi] === 2) { S.board[bi] = 0; need--; cut++; }
+        }
+        need = needRack;
+        for (var bj = S.space - 1; bj >= 0 && need > 0; bj--) {
+          if (S.board[bj] === 3) { S.board[bj] = 0; need--; }
+        }
+        if (!S.canoeLesson) S.canoeLesson = true;
+        Game.FX.toast('独木舟造出来了，可它太重，怎么也拖不下海。\n五六个月的心血全留在原地。\n\n（教训：下次造船，得先看离海多远）\n此后采集少走弯路');
+      }
+    } else if (cb === 'lore_bigcanoe_skip') {
+      Game.FX.toast('你摸了摸树干，转身走了。那根刺还在心里');
+    } else if (cb === 'lore_footprint') {
+      // V1.12 原著（约第17年）：他发现沙滩脚印，随后找到人骨与生火痕迹
+      var gotFp = 0;
+      for (var fi = 0; fi < 2; fi++) {
+        var fp = firstEmpty();
+        if (fp >= 0) { S.board[fp] = 21; gotFp++; }
+      }
+      S.energy = Math.max(0, S.energy - 2);
+      Game.FX.toast('脚印尽头是一处废弃营地：焦黑的石圈、啃剩的骨头。\n你捡走 ' + gotFp + ' 块石头，体力 -2。\n\n这座岛上，不止你一个人');
+      autoMerge();
+    } else if (cb === 'lore_footprint_skip') {
+      Game.FX.toast('你把沙子抹平，可那天夜里没睡着');
     }
     // V1.9机制修复: 事件不再直接推进日记（日记改由累计天数驱动，避免开局速通解锁）
     save();
@@ -339,6 +422,8 @@
     var rate = D.MISS_RATE;
     if (wInfo.gatherBoost > 1) rate = D.MISS_RATE / wInfo.gatherBoost; // 晴天降低空手率
     if (S.gatherBonus) rate *= 0.8; // V1.6: 陷阱解锁后空手率再降 20%
+    // V1.12: 巨杉独木舟的教训（原著第6年造大船拖不下海）→ 之后采集少走弯路
+    if (S.canoeLesson) rate *= 0.85;
     return Math.max(0.12, rate - 0.05); // V1.2: 整体 -5% 空手
   }
   // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
@@ -1231,11 +1316,24 @@
     // V1.11机制修复: 补上真实转发调用 —— 原实现只改本地数值，真机上点「分享」不会有任何反应
     // （分享面板是否发出由玩家决定，奖励即发；上架前需自查是否触碰平台「诱导分享」红线）
     try {
-      if (wx.shareAppMessage) wx.shareAppMessage({ title: '我在荒岛上活到了第 ' + S.day + ' 天' });
+      if (wx.shareAppMessage) wx.shareAppMessage({ title: '我在绝望岛上活到了第 ' + S.day + ' 天' });
     } catch (e) {}
   };
   // V1.10: 导出烹饪（此前 cookFood 未导出 → 渲染层无入口，饱食度无法恢复）
   App.cookFood = cookFood;
+  // V1.12: 原著改编层导出 —— 两季 / 木刻记日 / 鹦鹉 Poll
+  App.getSeasonInfo = getSeasonInfo;
+  App.getNotchInfo = function () {
+    return {
+      day: S.day,
+      week: D.NOTCH_RULE.week,
+      month: D.NOTCH_RULE.month,
+      startDate: D.CASTAWAY_DATE,
+      islandName: D.ISLAND_NAME,
+      canoeLesson: !!S.canoeLesson
+    };
+  };
+  App.hasParrot = function () { return !!S.parrot; };
 
   Game.App = App;
 })();

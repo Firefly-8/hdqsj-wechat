@@ -185,7 +185,8 @@
   var DT_SUBS = ['又是新的一天', '日头西斜，该歇了', '晨光熹微', '夜幕降临'];
 
   // CG 打字文案
-  var CG_TEXT = '狂风骤雨，船触了礁。\n我醒来时，已在一片陌生的沙滩。';
+  // V1.12: 第三行为原著原文（笛福《鲁滨逊漂流记》中他刻在木柱上的第一句话）
+  var CG_TEXT = '狂风骤雨，船触了礁。\n我醒来时，已在一片陌生的沙滩。\n1659 年 9 月 30 日，我在此上岸。';
 
   // 空手概率（demo 25% 便于体验文案；上线调回 8-12%）
   var MISS_RATE = 0.25;
@@ -238,6 +239,57 @@
     }
   ];
 
+  // ============ V1.12 鲁滨逊改编层（方案 A：轻量叠加） ============
+  // 原著《鲁滨逊漂流记》(Robinson Crusoe) 笛福 1719 年出版、1731 年去世 → 早已进入公版（中国保护期＝作者终身+死后50年），
+  // 角色、地名、情节细节均可自由使用；本层只做「内容层 + 彩蛋层」，不改动既有玩法骨架（四结局/轮回/合成链）。
+  //
+  // 上岸日期为原著原文：1659 年 9 月 30 日
+  var CASTAWAY_DATE = '1659\u5E749\u670830\u65E5';
+  // 木刻记日：原著中他在方柱四边每天刻一个凹口，每 7 天刻一个长一倍的，每月第一天再长一倍
+  var NOTCH_RULE = { week: 7, month: 30 };
+  // 原著岛名：绝望岛（Island of Despair）—— 他登陆后给岛起的名字
+  var ISLAND_NAME = '\u7EDD\u671B\u5C9B';
+  // 原著两季：旱季 / 雨季（笛福写他观察到岛上只有两季，与温带四季不同）
+  var SEASONS = [
+    { id: 0, name: '旱季', em: '\u2600\uFE0F', desc: '日头毒，椰子多，走两步就渴' },
+    { id: 1, name: '雨季', em: '\uD83C\uDF27\uFE0F', desc: '雨一场接一场，滩涂全是烂泥' }
+  ];
+  var SEASON_DAYS = 10; // 每 10 天换一季
+
+  // 原著细节事件（均为公版，可自由使用）
+  var LORE_EVENTS = [
+    {
+      id: 'parrot',
+      dayMin: 3, once: true,
+      title: '\uD83E\uDD9C 一只小鹦鹉', // 原著：他捉到一只小鹦鹉，起名 Poll
+      body: '林子里捡到一只羽翼未丰的小鹦鹉，它歪着头看你，像是在等一个名字。',
+      options: [
+        { label: '叫它 Poll', primary: true, cb: 'lore_parrot' },
+        { label: '不养，放它走', primary: false, cb: 'lore_parrot_skip' }
+      ]
+    },
+    {
+      id: 'bigcanoe',
+      dayMin: 5, once: true,
+      title: '\uD83C\uDF32 一棵巨杉', // 原著：第6年砍倒大树造独木舟，花五六个月，太重拖不下海，前功尽弃
+      body: '岛心立着一棵巨杉，树干粗得两人合抱。造一条能远航的大独木舟，一直是你心里那根刺。',
+      options: [
+        { label: '砍倒它，造大船', primary: true, cb: 'lore_bigcanoe' },
+        { label: '算了，用现成的', primary: false, cb: 'lore_bigcanoe_skip' }
+      ]
+    },
+    {
+      id: 'footprint',
+      dayMin: 9, once: true,
+      title: '\uD83D\uDC63 沙滩上的脚印', // 原著：约第17年发现脚印，惊恐万分
+      body: '退潮后的湿沙上，清清楚楚一个脚印——不是你的。你左右张望，只有浪声。',
+      options: [
+        { label: '追查脚印', primary: true, cb: 'lore_footprint' },
+        { label: '当作没看见', primary: false, cb: 'lore_footprint_skip' }
+      ]
+    }
+  ];
+
   globalThis.Game = globalThis.Game || {};
   Game.DATA = {
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
@@ -246,6 +298,9 @@
     LOGS: LOGS, DIARY_CHAPTERS: DIARY_CHAPTERS, VICTORY_TEXT: VICTORY_TEXT,
     DT_ICONS: DT_ICONS, DT_SUBS: DT_SUBS, CG_TEXT: CG_TEXT,
     MISS_RATE: MISS_RATE, ITEM_IMG: ITEM_IMG, DAILY_BOTTLE: DAILY_BOTTLE,
-    BG_IMG: BG_IMG, WEATHER: WEATHER, EVENTS: EVENTS
+    BG_IMG: BG_IMG, WEATHER: WEATHER, EVENTS: EVENTS,
+    // V1.12 原著改编层
+    CASTAWAY_DATE: CASTAWAY_DATE, NOTCH_RULE: NOTCH_RULE, ISLAND_NAME: ISLAND_NAME,
+    SEASONS: SEASONS, SEASON_DAYS: SEASON_DAYS, LORE_EVENTS: LORE_EVENTS
   };
 })();
