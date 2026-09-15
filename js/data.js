@@ -19,8 +19,9 @@
   // V1.9机制修复: 食物链语义自洽 —— 椰子→椰肉干(晒干)→椰油饼(压榨烤制)→炭烤椰排(火烤终极料理)
   // 原「椰肉干→烤鱼→烤肉」逻辑断裂（椰肉干不会变成鱼/肉），且 emoji 错位（椰肉干用米饭🍚、烤肉用饼干🍪）
   var ITEMS = {
-    1:  { name: '浮木',   em: '\uD83E\uDDEB', chain: 'wood',  lv: 1, next: 2  },
-    2:  { name: '木板',   em: '\uD83F\uDFCB', chain: 'wood',  lv: 2, next: 3  },
+    // V1.11 修正 emoji：浮木原为 \uD83E\uDDEB（U+1F9EB 培养皿）、木板原为 \uD83F\uDFCB（U+1FFCB 未分配码位，真机会显示豆腐块）
+    1:  { name: '浮木',   em: '\uD83E\uDEB5', chain: 'wood',  lv: 1, next: 2  },
+    2:  { name: '木板',   em: '\uD83E\uDDF1', chain: 'wood',  lv: 2, next: 3  },
     3:  { name: '木架',   em: '\uD83D\uDED6', chain: 'wood',  lv: 3, next: 0  },
     11: { name: '椰子',   em: '\uD83E\uDD65', chain: 'food',  lv: 1, next: 12 },
     12: { name: '椰肉干', em: '\uD83C\uDF58', chain: 'food',  lv: 2, next: 13 },
@@ -54,7 +55,7 @@
       nodes: [
         { id: 101, name: '栅栏围墙', em: '\uD83E\uDDF1', need: { 3: 1, 23: 1 }, desc: '防御 +10', unlocks: '', prev: 0 },
         { id: 102, name: '木桩阵', em: '\uD83E\uDD94', need: { 3: 2, 23: 1, 1: 3 }, desc: '防御 +15', unlocks: '', prev: 101 },
-        { id: 103, name: '箭塔', em: '\uD83D\uDDCD', need: { 3: 2, 23: 2, 14: 1 }, desc: '防御 +20', unlocks: '', prev: 102 },
+        { id: 103, name: '箭塔', em: '\uD83C\uDFF9', need: { 3: 2, 23: 2, 14: 1 }, desc: '防御 +20', unlocks: '', prev: 102 },
         { id: 104, name: '瞭望塔', em: '\uD83D\uDC41', need: { 3: 3, 23: 2, 14: 1 }, desc: '哨塔值守，体力上限 +3', unlocks: 'energy', prev: 103 },
         { id: 105, name: '烽火台', em: '\uD83D\uDD25', need: { 3: 3, 23: 3, 14: 2 }, desc: '结局：部落发现', unlocks: 'end_defense', prev: 104 }
       ]
@@ -64,11 +65,11 @@
       name: '采集',
       em: '\uD83C\uDFA3',
       nodes: [
-        { id: 111, name: '结绳', em: '\uD83D\uDCDD', need: { 1: 3 }, desc: '采集效率 +15%', unlocks: '', prev: 0 },
-        { id: 112, name: '渔网', em: '\uD83D\uDCA1', need: { 2: 2, 1: 5 }, desc: '采集效率 +25%', unlocks: '', prev: 111 },
-        { id: 113, name: '陷阱', em: '\uD83E\uDDD8', need: { 3: 1, 2: 2, 22: 2 }, desc: '采集效率 +35%，常获额外收获', unlocks: 'gather', prev: 112 },
-        { id: 114, name: '盐田', em: '\uD83C\uDFE6', need: { 2: 3, 22: 2, 14: 1 }, desc: '腌制保鲜，饱食上限 +5', unlocks: 'foodcap', prev: 113 },
-        { id: 115, name: '诱捕阵', em: '\uD83D\uDDEF', need: { 3: 2, 2: 3, 22: 2, 14: 2 }, desc: '结局：捕获商船', unlocks: 'end_gather', prev: 114 }
+        { id: 111, name: '结绳', em: '\uD83E\uDEA2', need: { 1: 3 }, desc: '采集效率 +15%', unlocks: '', prev: 0 },
+        { id: 112, name: '渔网', em: '\uD83D\uDD78\uFE0F', need: { 2: 2, 1: 5 }, desc: '采集效率 +25%', unlocks: '', prev: 111 },
+        { id: 113, name: '陷阱', em: '\uD83E\uDEA4', need: { 3: 1, 2: 2, 22: 2 }, desc: '采集效率 +35%，常获额外收获', unlocks: 'gather', prev: 112 },
+        { id: 114, name: '盐田', em: '\uD83E\uDDC2', need: { 2: 3, 22: 2, 14: 1 }, desc: '腌制保鲜，饱食上限 +5', unlocks: 'foodcap', prev: 113 },
+        { id: 115, name: '诱捕阵', em: '\uD83E\uDEA9', need: { 3: 2, 2: 3, 22: 2, 14: 2 }, desc: '结局：捕获商船', unlocks: 'end_gather', prev: 114 }
       ]
     },
     {
@@ -88,10 +89,10 @@
       name: '探索',
       em: '\uD83D\uDED1',
       nodes: [
-        { id: 131, name: '风筝', em: '\uD83C\uDF88', need: { 1: 2, 2: 1 }, desc: '探索范围 +1', unlocks: '', prev: 0 },
-        { id: 132, name: '信号镜', em: '\uD83D\uDCA1', need: { 2: 2, 22: 1, 14: 1 }, desc: '探索范围 +2', unlocks: '', prev: 131 },
-        { id: 133, name: '海图', em: '\uD83C\uDFF5', need: { 3: 1, 2: 2, 22: 1 }, desc: '绘制海图，每日漂流瓶 +1', unlocks: 'bottle', prev: 132 },
-        { id: 134, name: '独木舟', em: '\uD83D\uDEF5', need: { 3: 2, 2: 2, 14: 1 }, desc: '探索范围 +3', unlocks: '', prev: 133 },
+        { id: 131, name: '风筝', em: '\uD83E\uDE81', need: { 1: 2, 2: 1 }, desc: '探索范围 +1', unlocks: '', prev: 0 },
+        { id: 132, name: '信号镜', em: '\uD83E\uDE9E', need: { 2: 2, 22: 1, 14: 1 }, desc: '探索范围 +2', unlocks: '', prev: 131 },
+        { id: 133, name: '海图', em: '\uD83D\uDDFA\uFE0F', need: { 3: 1, 2: 2, 22: 1 }, desc: '绘制海图，每日漂流瓶 +1', unlocks: 'bottle', prev: 132 },
+        { id: 134, name: '独木舟', em: '\uD83D\uDEF6', need: { 3: 2, 2: 2, 14: 1 }, desc: '探索范围 +3', unlocks: '', prev: 133 },
         { id: 135, name: '木筏', em: '\uD83D\uDEA4', need: { 3: 3, 2: 3, 14: 2 }, desc: '结局：自制木筏', unlocks: 'end_explore', prev: 134 }
       ]
     }
@@ -213,7 +214,7 @@
     },
     {
       id: 'ruins',
-      title: '\uD83E\uDDF8 发现遗迹',
+      title: '\uD83C\uDFDB\uFE0F 发现遗迹', // V1.11: 修 emoji（原 \uD83E\uDDF8 = 🧸 泰迪熊，与遗迹无关）
       body: '你在海滩发现了一处古代遗迹，里面似乎有有用的材料！',
       options: [
         { label: '领取', primary: true, cb: 'ruins_claim' }
@@ -221,7 +222,7 @@
     },
     {
       id: 'bottle_rare',
-      title: '\uD83E\uDEB0 神秘漂流瓶',
+      title: '\uD83C\uDF7E 神秘漂流瓶', // V1.11: 修 emoji（原 \uD83E\uDEB0 = 🪰 苍蝇）
       body: '海岸边捡到一个神秘的瓶子，里面似乎装着珍贵的东西...',
       options: [
         { label: '打开', primary: true, cb: 'bottle_rare_claim' }

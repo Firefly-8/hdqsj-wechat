@@ -134,20 +134,31 @@
     }
 
     // toast：顶部 25% 位置，黑色圆角胶囊
+    // V1.11: 支持 \n 换行 + 限宽 —— 原实现只画单行，多行文案（如新周目提示）会挤成一行并溢出屏幕
     if (toastBox) {
       var t = toastBox;
       var alphaIn = t.t < 250 ? t.t / 250 : 1;
       ctx.globalAlpha = alphaIn;
       ctx.font = '13px sans-serif';
       ctx.textAlign = 'center';
-      var tw = ctx.measureText(t.text).width + 32;
-      var ty = H * 0.25;
+      ctx.textBaseline = 'middle';
+      var tLines = String(t.text).split('\n');
+      var tMaxW = 0;
+      for (var tl = 0; tl < tLines.length; tl++) {
+        var lw = ctx.measureText(tLines[tl]).width;
+        if (lw > tMaxW) tMaxW = lw;
+      }
+      var tw = Math.min(W - 24, tMaxW + 32);
+      var tLh = 18;
+      var tBoxH = tLines.length * tLh + 14;
+      var ty = H * 0.25 - tBoxH / 2;
       ctx.fillStyle = 'rgba(0,0,0,0.75)';
-      roundRect(ctx, (W - tw) / 2, ty - 16, tw, 32, 16);
+      roundRect(ctx, (W - tw) / 2, ty, tw, tBoxH, Math.min(16, tBoxH / 2));
       ctx.fill();
       ctx.fillStyle = '#FFFFFF';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(t.text, W / 2, ty);
+      for (var tl2 = 0; tl2 < tLines.length; tl2++) {
+        ctx.fillText(tLines[tl2], W / 2, ty + 7 + tLh / 2 + tl2 * tLh);
+      }
       ctx.globalAlpha = 1;
     }
 

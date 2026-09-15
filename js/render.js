@@ -436,7 +436,7 @@
     var gatherW = (W - 20) * 0.58, bottleW = (W - 20) * 0.4;
     var gatherActive = S.energy > 0;
     // V1.2: 显示有效体力上限（饥饿时减半）
-    var fInfo = Game.App.getFoodInfo ? Game.App.getFoodInfo() : null;
+    // V1.11: fInfo 已在顶栏处取得，此处去掉重复的 var 声明（原写法虽不报错，但同函数内重复声明易埋隐患）
     var effectiveMax = fInfo ? fInfo.effectiveMaxEnergy : S.maxEnergy;
     var gLabel = '\uD83C\uDFA3 采集 ' + S.energy + '/' + effectiveMax;
     // V1.5: 采集动画进行中，按钮显示「采集中...」并隐藏倒计时
@@ -447,7 +447,7 @@
     if (timerTxt && !animating) gLabel += ' ' + timerTxt;
     btn(ctx, 10, ay, gatherW, 42, gLabel, C.fire, '#FFFFFF', gatherActive, pressed === 'gather', 10, 13);
     hit(10, ay, gatherW, 42, function () { Game.App.gather(); });
-    btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83E\uDEB0 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
+    btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83C\uDF7E 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
     hit(10 + gatherW + 6, ay, bottleW, 42, function () { Game.App.bottle(); });
 
     // V1.5: 休息 + 烹饪 + 分享按钮（V1.10: 补上烹饪入口 —— 此前 cookFood 无 UI，饱食度无法恢复）
@@ -504,7 +504,7 @@
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('\uD83D\uDE80 建造', W / 2, 18);
+    ctx.fillText('\uD83C\uDFD7\uFE0F 建造', W / 2, 18); // V1.11: 原为 🚀（火箭），与「建造」语义不符
 
     // V1.4: 显示被封锁的分支
     if (S.lockedTrees && S.lockedTrees.length > 0) {
@@ -520,9 +520,9 @@
     }
 
     var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 48 : 36;
-    var y = startY;
 
     // 遍历所有科技树节点，以列表形式展示（V1.6: 支持滚动）
+    // V1.11: 去掉此处原有的 `var y = startY;`（后续在裁剪块内重新声明，属死代码）
     var trees = Game.DATA.TECH_TREES;
     // V1.9: 分支配色（分组概念：区分 防御/采集/建造/探索 四类，便于快速阅读）
     var BRANCH_STYLE = {
@@ -652,8 +652,16 @@
 
           // 建造按钮
           var bBtnW = 70, bBtnH = 22;
-          btn(ctx, W - 20 - bBtnW, oy + cardH - 28, bBtnW, bBtnH, can ? '建造' : '不足', C.leaf, '#FFFFFF', hasAllRes && can, pressed === 'build' + node.id, 6, 10);
-          hit(W - 20 - bBtnW, oy + cardH - 28, bBtnW, bBtnH, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
+          var bby = oy + cardH - 28;
+          btn(ctx, W - 20 - bBtnW, bby, bBtnW, bBtnH, can ? '建造' : '不足', C.leaf, '#FFFFFF', hasAllRes && can, pressed === 'build' + node.id, 6, 10);
+          // V1.11机制修复: 命中区原本无条件注册 —— 卡片滚动出裁剪区后按钮矩形仍留在 hits 里，
+          //   点标题栏等位置会误触到屏幕外的建造。现仅当按钮本身与可视区相交时才注册。
+          if (bby + bBtnH > contentTop && bby < bottom) {
+            // 命中区再裁剪到可视区内，避免按钮滚到边界时把可点区域延伸到标题栏 / Tab 栏
+            var hitTop = Math.max(bby, contentTop);
+            var hitBot = Math.min(bby + bBtnH, bottom);
+            hit(W - 20 - bBtnW, hitTop, bBtnW, hitBot - hitTop, (function (nid) { return function () { Game.App.buildStage(nid); }; })(node.id));
+          }
         } else if (done) {
           // 效果描述
           ctx.textAlign = 'left';
@@ -1034,7 +1042,12 @@
       else drawGame(ctx, W, H);
     }
     Game.FX.draw(ctx, W, H);
+    // V1.11机制修复: 弹窗应为模态 —— 原实现把弹窗按钮「追加」在游戏页 hits 之后，
+    //   触摸逆序匹配虽能优先命中弹窗按钮，但点在弹窗外仍会落到下层按钮上
+    //   （弹窗期间可以采集 / 建造 / 切 tab）。现裁掉弹窗之前注册的全部命中区。
+    var hitsBeforeModal = Game.hits.length;
     drawModal(ctx, W, H);
+    if (Game.modal) Game.hits = Game.hits.slice(hitsBeforeModal);
   }
 
   Game.Render = { render: render, btn: btn, roundRect: roundRect, hit: hit };

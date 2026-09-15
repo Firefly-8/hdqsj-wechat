@@ -41,7 +41,13 @@
       // V1.4 轮回封锁（首次为空，轮回后随机生成）
       lockedTrees: [],
       // V1.8: 小说日记进度（随玩法解锁）与真结局 meta
-      diaryScore: 0, diary: [], earnedEndings: [], rebirths: 0, totalBuilds: 0, totalDays: 0
+      diaryScore: 0, diary: [], earnedEndings: [], rebirths: 0, totalBuilds: 0, totalDays: 0,
+      // V1.11: 真结局一次性闸门（earnedEndings 跨周目保留，原实现会让真结局被无限重复触发）
+      trueEndingDone: false,
+      // V1.11: 科技树解锁标记显式初始化（原为 undefined，靠 falsy 侥幸工作）
+      craftBonus: false, gatherBonus: false, bottleBonus: false,
+      // V1.11: 休息额度显式初始化
+      _restCount: 3, _lastRest: 0
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -105,13 +111,26 @@
       S.eventDone = false;
     }
   }
+  // V1.11: 饥饿时体力上限减半 —— 统一出口，避免各处各算一份导致显示与行为不一致
+  function effectiveMaxEnergy() {
+    return S.food > 0 ? S.maxEnergy : Math.floor(S.maxEnergy * 0.5);
+  }
+  // 两个日期串之间的天数差（用于离线补算）
+  function daysBetween(fromStr, toStr) {
+    var a = new Date(fromStr), b = new Date(toStr);
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return 1;
+    return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000));
+  }
   // V1.2: 每日饱食度刷新（新的一天到来时扣除饱食）
+  // V1.11机制修复: 原实现固定只扣 1 点、不按间隔天数补算 → 离线 10 天回归也只掉 1 点，饱食度压力形同虚设
   function dailyFoodReset() {
     var today = new Date().toDateString();
     if (S.foodDate !== today) {
+      var days = daysBetween(S.foodDate, today);
       S.foodDate = today;
-      // 每天扣除 1 点饱食
-      S.food = Math.max(0, S.food - 1);
+      S.food = Math.max(0, S.food - days);
+      // V1.11: 饥饿使上限减半后，当前体力需同步收敛，否则会出现「20/10」这种越界显示
+      S.energy = Math.min(S.energy, effectiveMaxEnergy());
     }
   }
   // V1.1: 获取当前天气信息
@@ -153,11 +172,14 @@
     // 处理各事件选项
     if (cb === 'beast_fight') {
       // 战斗：消耗 2 浮木
-      var removed = 0;
-      for (var i = S.space - 1; i >= 0 && removed < 2; i--) {
-        if (S.board[i] === 1) { S.board[i] = 0; removed++; }
-      }
-      if (removed >= 2) {
+      // V1.11机制修复: 原实现「边扣边判」—— 只有 1 个浮木时，那 1 个会先被扣掉，
+      //   随后 removed<2 又走失败分支再扣 2 个随机资源，净损失 3 个，而提示只说「损失 2 个资源」。
+      //   现先校验数量，不足则完全不扣浮木，直接进失败分支。
+      if (countItem(1) >= 2) {
+        var removed = 0;
+        for (var i = S.space - 1; i >= 0 && removed < 2; i--) {
+          if (S.board[i] === 1) { S.board[i] = 0; removed++; }
+        }
         Game.FX.toast('战斗胜利！消耗 2 浮木');
       } else {
         // V1.10机制修复: 原「物资散落」无任何惩罚 = 战斗必胜（而逃跑必掉资源）→ 选项严重失衡
@@ -171,7 +193,7 @@
           lostIdx.splice(ri, 1);
           lostCount++;
         }
-        Game.FX.toast(lostCount > 0 ? ('赤手空拳，被野兽冲散！损失 ' + lostCount + ' 个资源') : '赤手空拳，所幸没丢东西');
+        Game.FX.toast(lostCount > 0 ? ('浮木不足，被野兽冲散！损失 ' + lostCount + ' 个资源') : '浮木不足，所幸没丢东西');
       }
     } else if (cb === 'beast_flee') {
       // 逃跑：损失 1 随机资源
@@ -186,20 +208,29 @@
       }
     } else if (cb === 'ruins_claim') {
       // 遗迹：获得随机 L1 材料 × 2
+      // V1.11机制修复: 原实现棋盘满时静默丢弃，toast 仍报「获得 2 个资源」（谎报）
+      var gotRuins = 0;
       for (var k = 0; k < 2; k++) {
         var p = firstEmpty();
-        if (p >= 0) S.board[p] = D.L1[Math.floor(Math.random() * 3)];
+        if (p >= 0) { S.board[p] = D.L1[Math.floor(Math.random() * 3)]; gotRuins++; }
       }
-      Game.FX.toast('发现遗迹！获得 2 个资源');
+      Game.FX.toast(gotRuins > 0 ? ('发现遗迹！获得 ' + gotRuins + ' 个资源') : '发现遗迹，但背筐已满');
+      autoMerge();
     } else if (cb === 'bottle_rare_claim') {
       // 神秘漂流瓶：获得随机 L2 材料
       var p2 = firstEmpty();
-      if (p2 >= 0) S.board[p2] = D.L2_BONUS[Math.floor(Math.random() * 3)];
-      Game.FX.toast('神秘漂流瓶：获得稀有材料！');
+      if (p2 >= 0) {
+        S.board[p2] = D.L2_BONUS[Math.floor(Math.random() * 3)];
+        Game.FX.toast('神秘漂流瓶：获得稀有材料！');
+      } else {
+        Game.FX.toast('背筐已满，神秘漂流瓶没能收下');
+      }
+      autoMerge();
     } else if (cb === 'sunny_gift_claim') {
-      // 晴天惊喜：本次采集 +1 体力（标记到 S，gather 时检查）
+      // 晴天惊喜：下一次采集不消耗体力（标记到 S，gather 时检查 _sunnyGift）
+      // V1.11: 文案原写「体力 +1」，但实现是「免消耗 1 点」，两者不等价（体力已满时前者仍有收益、后者没有）
       S._sunnyGift = true;
-      Game.FX.toast('晴天惊喜！下次采集体力 +1');
+      Game.FX.toast('晴天惊喜！下次采集不耗体力');
     }
     // V1.9机制修复: 事件不再直接推进日记（日记改由累计天数驱动，避免开局速通解锁）
     save();
@@ -220,7 +251,8 @@
     // 离线补体力（按真实时间戳）
     if (S.energyTs) {
       var add = Math.floor((now - S.energyTs) / D.E_INTERVAL);
-      S.energy = Math.min(S.maxEnergy, (S.energy || 0) + add);
+      // V1.11: 上限改用 effectiveMaxEnergy（饥饿时不该补到减半前的上限）
+      S.energy = Math.min(effectiveMaxEnergy(), (S.energy || 0) + add);
     }
     S.energyTs = now;
     dailyBottleReset();
@@ -311,6 +343,14 @@
   }
   // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
   function processGatherResult(pos) {
+    // V1.11机制修复: 采集动画 2.4s 期间棋盘仍可被改动（例如烹饪会用 firstEmpty 放产物），
+    //   原实现直接写回 S.board[pos]，会把动画期间落到该格的物品安静覆盖掉 —— 材料白费且玩家无从察觉。
+    //   现先校验原位置是否已被占用，被占则另寻空位。
+    if (S.board[pos]) {
+      var alt = firstEmpty();
+      if (alt < 0) { Game.FX.toast('棋盘满了，这次收获没地方放'); return; }
+      pos = alt;
+    }
     var cellRect = getCellRect(pos);
     var cx = cellRect.x + cellRect.w / 2;
     var cy = cellRect.y - 8;
@@ -394,13 +434,14 @@
 
   // ============ 建造（V1.3 科技树 + V1.4 分支封锁 + 天数过渡 + 营地升级光晕 + 结局） ============
   function buildStage(stId) {
-    var st = null;
+    var st = null, stTree = null;
     // V1.3: 科技树节点查找
+    // V1.11: 改用局部变量 —— 原实现把 _tree 挂到 D.TECH_TREES 的节点对象上，污染了全局常量
     for (var t = 0; t < D.TECH_TREES.length; t++) {
       for (var n = 0; n < D.TECH_TREES[t].nodes.length; n++) {
         if (D.TECH_TREES[t].nodes[n].id === stId) {
           st = D.TECH_TREES[t].nodes[n];
-          st._tree = D.TECH_TREES[t];
+          stTree = D.TECH_TREES[t];
           break;
         }
       }
@@ -408,8 +449,8 @@
     }
     if (!st || S.stages.indexOf(stId) >= 0) return;
     // V1.4: 检查该分支是否被封锁
-    if (S.lockedTrees && S.lockedTrees.indexOf(st._tree.id) >= 0) {
-      Game.FX.toast('\uD83D\uDD12 ' + st._tree.name + '\u5206\u5DF2\u5C01\u9500\uFF0C\u65E0\u6CD5\u5EFA\u9020');
+    if (S.lockedTrees && stTree && S.lockedTrees.indexOf(stTree.id) >= 0) {
+      Game.FX.toast('\uD83D\uDD12 ' + stTree.name + '\u5206\u652F\u5DF2\u5C01\u9501\uFF0C\u65E0\u6CD5\u5EFA\u9020'); // V1.11: 修「分已封销」错字（应为「分支已封锁」）
       return;
     }
     // V1.3: 检查前置节点是否已建造
@@ -520,7 +561,15 @@
     }
     save();
     // V1.8: 集齐四种归途 → 真结局胜利庆祝（大结局）
-    if (S.earnedEndings.length >= 4) { triggerVictory(); return; }
+    // V1.11机制修复: 原实现只看 earnedEndings.length>=4，而该数组跨周目保留 →
+    //   第二周目建出第一个结局节点就会被判定为「已集齐」，直接跳真结局页，且可无限重复。
+    //   现加 trueEndingDone 一次性闸门。
+    if (S.earnedEndings.length >= 4 && !S.trueEndingDone) {
+      S.trueEndingDone = true;
+      save();
+      triggerVictory();
+      return;
+    }
     var got = S.earnedEndings.length;
     openModal({
       title: ending.title,
@@ -554,6 +603,7 @@
     var keepTotalBuilds = S.totalBuilds || 0;
     S = freshSave(10);
     S.earnedEndings = keepEndings;
+    S.trueEndingDone = true; // V1.11: 从真结局页进入，闸门保持关闭状态
     S.rebirths = rb;
     S.diary = keepDiary;
     S.diaryScore = keepDiaryScore;
@@ -584,6 +634,8 @@
     var keepDiaryScore = S.diaryScore || 0;
     var keepTotalDays = S.totalDays || 0;
     var keepTotalBuilds = S.totalBuilds || 0;
+    // V1.11: 真结局已达成需跨周目保留，否则闸门被重置 → 真结局可被重复触发
+    var keepTrueEnding = !!S.trueEndingDone;
     var rb = (S.rebirths || 0) + 1;
     // V1.4: 随机封锁 2 条科技分支
     var allTreeIds = ['defense', 'gather', 'build', 'explore'];
@@ -593,6 +645,7 @@
     S.manualBonus = keep;
     S.entered = oldEnter;
     S.earnedEndings = keepEndings;
+    S.trueEndingDone = keepTrueEnding;
     S.rebirths = rb;
     // V1.8审查修复: 跨周目保留日记与累计统计
     S.diary = keepDiary;
@@ -603,8 +656,12 @@
     // V1.4: 记录被封锁的分支
     S.lockedTrees = lockedTrees;
     dailyBottleReset();
-    // 求生手册加成：新周目棋盘预置 keep 个一级资源作为启动优势
-    for (var k = 0; k < keep; k++) { var p = firstEmpty(); if (p >= 0) S.board[p] = D.L1[k % 3]; }
+    // 求生手册加成：新周目棋盘预置一级资源作为启动优势
+    // V1.11机制修复: 原按 keep（=上周目建造数，最多 20）全量预置，而 space 只有 20 →
+    //   新周目开局棋盘直接满载，采集/捞瓶全被「棋盘已满」挡住，必须先建造腾位。
+    //   现限制为最多 6 个，既保留启动优势又不锁死棋盘。
+    var seedCount = Math.min(keep, 6);
+    for (var k = 0; k < seedCount; k++) { var p = firstEmpty(); if (p >= 0) S.board[p] = D.L1[k % 3]; }
     save();
     Game.S = S;
     Game.scene = 'home';
@@ -615,7 +672,7 @@
       }
       return tid;
     }).join('、');
-    Game.FX.toast('\u65B0\u5468\u76EE\uFF01\u4F53\u529B\u4E0A\u9650 +' + keep + '\uFF0C\u83B7\u6C42\u751F\u624B\u518C\u542F\u52A8\u7269\u8D44\n\u672C\u5468\u76EE\u5C01\u9500\uFF1A' + lockedNames); // 新周目！体力上限 +keep，获求生手册启动物资 本周目封锁：xx
+    Game.FX.toast('\u65B0\u5468\u76EE\uFF01\u4F53\u529B\u4E0A\u9650 +' + keep + '\uFF0C\u542F\u52A8\u7269\u8D44 ' + seedCount + ' \u4E2A\n\u672C\u5468\u76EE\u5C01\u9501\uFF1A' + lockedNames); // V1.11: 修「封销」错字 + 文案去掉冗余，toast 现支持多行
   }
 
   // ============ 漂流瓶 ============
@@ -654,7 +711,8 @@
   // ============ 广告 ============
   function grantAd(type) {
     if (type === 'energy') {
-      S.energy = Math.min(S.maxEnergy, S.energy + 5);
+      // V1.11: 用 effectiveMaxEnergy，避免饥饿时看广告突破减半上限
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + 5);
       S.energyTs = Date.now();
       Game.FX.toast('体力 +5');
     } else if (type === 'bottle') {
@@ -666,7 +724,7 @@
     save();
   }
   function onAdEnergy() {
-    if (S.energy >= S.maxEnergy) { Game.FX.toast('体力已满'); return; }
+    if (S.energy >= effectiveMaxEnergy()) { Game.FX.toast('体力已满'); return; }
     Game.AD.showReward('energy', function () { grantAd('energy'); });
   }
   function onAdOffline() {
@@ -697,14 +755,19 @@
     S.offlineUnclaimed = S._offlineReward > 0;
   }
   function grantOffline(times) {
+    var got = 0;
     for (var i = 0; i < times; i++) {
       var p = firstEmpty();
       if (p < 0) break;
       S.board[p] = D.L1[Math.floor(Math.random() * 3)];
+      got++;
     }
     S.offlineUnclaimed = false;
     autoMerge();
-    Game.FX.toast('\u9886\u53D6\u79BB\u7EBF\u6536\u76CA\uFF1A' + times + '\u4E2A\u8D44\u6E90'); // 领取离线收益：N个资源
+    // V1.11机制修复: 原 toast 恒报 times，但棋盘满时实际入账为 0 → 谎报
+    Game.FX.toast(got > 0
+      ? ('\u9886\u53D6\u79BB\u7EBF\u6536\u76CA\uFF1A' + got + '\u4E2A\u8D44\u6E90')
+      : '\u68CB\u76D8\u5DF2\u6EE1\uFF0C\u79BB\u7EBF\u6536\u76CA\u672A\u5165\u8D26');
     save();
   }
 
@@ -712,21 +775,27 @@
   function switchTab(t) { Game.tab = t; }
 
   // 体力倒计时文案（对应 #energyTimer）
+  // V1.11机制修复: 倒计时改用与 tryTickEnergy 一致的「实际恢复间隔」
+  //   原实现固定按 E_INTERVAL(30s) 计算，而雨天 energyRate=0.5 → 实际 60s 才 +1，
+  //   导致倒计时归零后长时间卡在「0s」，玩家会以为体力系统坏了
   function energyTimerText() {
-    if (S.energy >= S.maxEnergy) return '\u6EE1'; // 满
+    if (S.energy >= effectiveMaxEnergy()) return '\u6EE1'; // 满
     // V1.8审查修复: 风暴天 energyRate=0，体力不会恢复，倒计时会误导玩家以为在回体力
     var w = getWeatherInfo();
     if (w && !w.energyRate) return '\u26C8\uFE0F 停';
-    var remain = Math.max(0, Math.ceil((D.E_INTERVAL - (Date.now() - S.energyTs)) / 1000));
+    var interval = D.E_INTERVAL / (w && w.energyRate ? w.energyRate : 1);
+    var remain = Math.max(0, Math.ceil((interval - (Date.now() - S.energyTs)) / 1000));
     return remain + 's';
   }
   function tryTickEnergy() {
-    if (S.energy < S.maxEnergy && S.energyTs) {
-      // V1.1: 体力恢复受天气影响（雨夭 energyRate = 0.5）
+    // V1.11: 上限改用 effectiveMaxEnergy —— 饥饿时体力不该恢复到减半前的上限
+    var cap = effectiveMaxEnergy();
+    if (S.energy < cap && S.energyTs) {
+      // V1.1: 体力恢复受天气影响（雨天 energyRate = 0.5）
       var wInfo = getWeatherInfo();
       var effectiveInterval = D.E_INTERVAL / wInfo.energyRate;
       if (Date.now() - S.energyTs >= effectiveInterval) {
-        S.energy++;
+        S.energy = Math.min(cap, S.energy + 1);
         S.energyTs = Date.now();
         save();
       }
@@ -831,7 +900,7 @@
       // 加载完成后再弹离线/首玩引导，避免盖在 loading 之上
       if (S.offlineUnclaimed && S._offlineReward > 0) {
         openModal({
-          title: '\uD83C\uDF0A \u6B22\u8FCE\u56DE\u5230\u830D\u5C9B', // 欢迎回到荒岛
+          title: '\uD83C\uDF0A \u6B22\u8FCE\u56DE\u5230\u8352\u5C9B', // V1.11: 修「茍岛」错字（\u830D → \u8352 荒）
           body: '你离开了 ' + Math.floor(S._offlineSec / 60) + ' 分钟\n营地为你攒下了 ' + S._offlineReward + ' 个资源',
           buttons: [
             { label: '直接领取', primary: false, cb: function () { closeModal(); grantOffline(S._offlineReward); triggerDailyEvent(); } },
@@ -1112,7 +1181,7 @@
       food: S.food,
       maxFood: S.maxFood,
       isHungry: S.food === 0,
-      effectiveMaxEnergy: S.food > 0 ? S.maxEnergy : Math.floor(S.maxEnergy * 0.5)
+      effectiveMaxEnergy: effectiveMaxEnergy() // V1.11: 改用统一出口，避免与 tryTickEnergy 各算一份
     };
   };
   // V1.5: 休息功能（每小时3次，+2体力）
@@ -1130,8 +1199,11 @@
   App.onRest = function () {
     var info = App.getRestInfo();
     if (info.left <= 0) { Game.FX.toast('休息冷却中，请稍后再试'); return; }
+    // V1.11: 满体力时不再白白消耗次数；上限改用 effectiveMaxEnergy（饥饿时不该突破减半上限）
+    var cap = effectiveMaxEnergy();
+    if (S.energy >= cap) { Game.FX.toast('体力已满，不用休息'); return; }
     S._restCount--;
-    S.energy = Math.min(S.maxEnergy, S.energy + 2);
+    S.energy = Math.min(cap, S.energy + 2);
     S.energyTs = Date.now();
     Game.FX.toast('\uD83D\uDC4F 休息恢复 +2 体力');
     save();
@@ -1148,12 +1220,19 @@
   App.onShare = function () {
     var info = App.getShareInfo();
     if (info.left <= 0) { Game.FX.toast('今日分享次数已用完'); return; }
-    // 模拟分享：实际应该调用 wx.shareAppMessage
+    // V1.11: 满体力时不再白白消耗次数；上限改用 effectiveMaxEnergy
+    var cap = effectiveMaxEnergy();
+    if (S.energy >= cap) { Game.FX.toast('体力已满，先去采集吧'); return; }
     S._shareCount--;
-    S.energy = Math.min(S.maxEnergy, S.energy + 3);
+    S.energy = Math.min(cap, S.energy + 3);
     S.energyTs = Date.now();
     Game.FX.toast('\uD83D\uDD14 分享成功 +3 体力');
     save();
+    // V1.11机制修复: 补上真实转发调用 —— 原实现只改本地数值，真机上点「分享」不会有任何反应
+    // （分享面板是否发出由玩家决定，奖励即发；上架前需自查是否触碰平台「诱导分享」红线）
+    try {
+      if (wx.shareAppMessage) wx.shareAppMessage({ title: '我在荒岛上活到了第 ' + S.day + ' 天' });
+    } catch (e) {}
   };
   // V1.10: 导出烹饪（此前 cookFood 未导出 → 渲染层无入口，饱食度无法恢复）
   App.cookFood = cookFood;
