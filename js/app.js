@@ -594,7 +594,7 @@
   function gather() {
     // V1.5: 动画进行中禁止重复触发，避免能量被多次扣除
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return;
-    // V1.1: 风暴天禁止采集
+    if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return;
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
     if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; } // V1.15: 前期无广告，去掉误导文案
@@ -657,6 +657,8 @@
 
   // ============ 建造（V1.3 科技树 + V1.4 分支封锁 + 天数过渡 + 营地升级光晕 + 结局） ============
   function buildStage(stId) {
+    if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return;
+    if (Game.FX.dayTransitionActive && Game.FX.dayTransitionActive()) return;
     var st = null, stTree = null;
     // V1.3: 科技树节点查找
     // V1.11: 改用局部变量 —— 原实现把 _tree 挂到 D.TECH_TREES 的节点对象上，污染了全局常量
@@ -737,10 +739,17 @@
     save();
     // 天数过渡动画 → 营地升级光晕 → 提示
     if (S.guideStep) { S.guideStep = 0; S.guideDone = true; }
-    Game.FX.dayTransition(S.day, function () {
-      Game.FX.campUp();
-      Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
-    });
+    // V1.16: 先敲击建造反馈，再接天数过渡 + 营地光晕
+    var buildMeta = { name: st.name, em: st.em || '\uD83D\uDD28' };
+    var afterBuildFx = function () {
+      Game.FX.dayTransition(S.day, function () {
+        Game.FX.campUp();
+        Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
+        Game.FX.sparkle((Game.canvas ? Game.canvas.width : 375) / 2, 86, '#E8763A', 12);
+      });
+    };
+    if (Game.FX.buildAnim) Game.FX.buildAnim(buildMeta, afterBuildFx);
+    else afterBuildFx();
   }
   // V1.2/V1.9: 烹饪功能（2 椰油饼 → 1 炭烤椰排，+3/4 饱食）
   // V1.10机制修复: ①原消耗 2 椰肉干(12) 是自动合成链(12→13→14 需 9 个 12)的 4.5 倍便宜，13 椰油饼形同虚设；
@@ -913,6 +922,7 @@
   function bottle() {
     // V1.8审查修复: 采集动画进行中禁止漂流瓶，避免 2.4s 后落子时覆盖刚开出的格子
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) { Game.FX.toast('采集中，请稍候'); return; }
+    if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) { Game.FX.toast('建造中，请稍候'); return; }
     if (S.bottle <= 0) {
       // V1.14: MVP 零广告上线——demo 模式不弹假广告，改提示明日再来
       // （UV≥1000 开通流量主、ad.js 填入真实广告位 ID 后 AD.mode 自动切 real，此入口自动恢复）
@@ -1162,6 +1172,7 @@
   function backHome() {
     save();
     Game.scene = 'home';
+    Game._homeT0 = null; // V1.16: 回首页重播淡入
   }
 
   // ============ 弹窗（对应 .overlay + .modal） ============

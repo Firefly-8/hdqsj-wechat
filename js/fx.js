@@ -38,6 +38,7 @@
   };
 
   // ---- 天数过渡（对应网页 #dayTrans：暗幕+太阳升起+第N天缩放，1.7s）----
+  FX.dayTransitionActive = function () { return !!dayTrans; };
   FX.dayTransition = function (day, cb) {
     var D = Game.DATA;
     var k = (day - 1) % 4;
@@ -64,6 +65,23 @@
   };
   FX.gatherAnimActive = function () { return gatherAnimT > 0; };
   FX.gatherAnimTime = function () { return gatherAnimT; };
+
+  // V1.16: 建造敲击动画（短反馈，再接天数过渡）
+  var BUILD_DUR = 0.95;
+  var buildAnimT = 0;
+  var buildAnimCb = null;
+  var buildAnimMeta = null; // { name, em }
+  FX.buildAnim = function (meta, cb) {
+    buildAnimT = BUILD_DUR;
+    buildAnimCb = cb || null;
+    buildAnimMeta = meta || { name: '', em: '\uD83D\uDD28' };
+    // 开场洒一点木屑粒子
+    var W = (Game.canvas && Game.canvas.width) || 375;
+    var H = (Game.canvas && Game.canvas.height) || 667;
+    FX.sparkle(W / 2, H * 0.42, '#C4A574', 14);
+    FX.sparkle(W / 2, H * 0.42, '#E8763A', 6);
+  };
+  FX.buildAnimActive = function () { return buildAnimT > 0; };
 
   // ---- 每帧更新 ----
   FX.update = function (dt) {
@@ -101,6 +119,21 @@
         var cb = gatherAnimCb;
         gatherAnimCb = null;
         if (cb) cb();
+      }
+    }
+    if (buildAnimT > 0) {
+      buildAnimT -= dt;
+      // 中段再喷一次木屑
+      if (buildAnimT > 0.45 && buildAnimT < 0.45 + dt) {
+        var Ww = (Game.canvas && Game.canvas.width) || 375;
+        var Hh = (Game.canvas && Game.canvas.height) || 667;
+        FX.sparkle(Ww / 2, Hh * 0.42, '#8B5E3C', 10);
+      }
+      if (buildAnimT <= 0 && buildAnimCb) {
+        var bcb = buildAnimCb;
+        buildAnimCb = null;
+        buildAnimMeta = null;
+        if (bcb) bcb();
       }
     }
   };
@@ -162,43 +195,62 @@
       ctx.globalAlpha = 1;
     }
 
-    // 天数过渡
+    // 天数过渡（V1.16: ease + 光晕，进出更柔）
     if (dayTrans) {
       var d = dayTrans;
       var prog = d.t / d.dur;
+      function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+      function easeInOut(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
       var a = 1;
-      if (prog < 0.12) a = prog / 0.12;
-      else if (prog > 0.72) a = 1 - (prog - 0.72) / 0.28;
+      if (prog < 0.15) a = easeOutCubic(prog / 0.15);
+      else if (prog > 0.7) a = 1 - easeInOut((prog - 0.7) / 0.3);
       a = Math.max(0, Math.min(1, a));
 
-      ctx.globalAlpha = a;
-      ctx.fillStyle = 'rgba(0,0,0,0.62)';
+      ctx.globalAlpha = a * 0.72;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+      // 中心暖光
+      var glow = ctx.createRadialGradient(W / 2, H * 0.42, 8, W / 2, H * 0.42, W * 0.55);
+      glow.addColorStop(0, 'rgba(255,200,120,' + (0.35 * a) + ')');
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
 
-      // 太阳/月亮升起：translateY 40→0→-10, scale .5→1
-      var sProg = Math.min(1, prog / 0.4);
-      var sy = (1 - sProg) * 40 - sProg * 10;
-      var ss = 0.5 + sProg * 0.5;
-      ctx.font = '40px sans-serif';
+      ctx.globalAlpha = a;
+      var sProg = easeOutCubic(Math.min(1, prog / 0.45));
+      var sy = (1 - sProg) * 48 - sProg * 8;
+      var ss = 0.45 + sProg * 0.55;
+      ctx.save();
+      ctx.translate(W / 2, H * 0.40 + sy);
+      ctx.scale(ss, ss);
+      ctx.font = '44px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(d.icon, W / 2, H * 0.42 + sy);
+      ctx.fillText(d.icon, 0, 0);
+      ctx.restore();
 
-      // 第 N 天：scale .3→1.15→1（对应 .dt-big dtbig 动画）
-      var bigProg = Math.min(1, prog / 0.55);
-      var bs = bigProg < 0.55 ? 0.3 + (bigProg / 0.55) * 0.85 : 1.15 - (bigProg - 0.55) * 0.15;
+      var bigProg = easeOutCubic(Math.min(1, prog / 0.6));
+      var bs = bigProg < 0.7 ? 0.25 + (bigProg / 0.7) * 0.9 : 1.15 - (bigProg - 0.7) * 0.5;
       ctx.save();
       ctx.translate(W / 2, H * 0.52);
       ctx.scale(bs, bs);
-      ctx.translate(-W / 2, -H * 0.52);
       ctx.font = 'bold 40px sans-serif';
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillText('第 ' + d.day + ' 天', W / 2, H * 0.52);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 8;
+      ctx.fillText('第 ' + d.day + ' 天', 0, 0);
       ctx.restore();
-      // 副标题
+
+      var subA = prog < 0.25 ? 0 : Math.min(1, (prog - 0.25) / 0.2);
+      ctx.globalAlpha = a * subA;
       ctx.font = '13px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.8)';
-      ctx.fillText(d.sub, W / 2, H * 0.52 + 34);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 0;
+      ctx.fillText(d.sub, W / 2, H * 0.52 + 36);
       ctx.globalAlpha = 1;
     }
 
@@ -227,6 +279,46 @@
       ctx.font = 'bold 17px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.fillText('\u91C6\u96C6\u4E2D...', W / 2, cy + 22);
+      ctx.globalAlpha = 1;
+    }
+
+    // V1.16: 建造敲击反馈
+    if (buildAnimT > 0) {
+      var bp = 1 - buildAnimT / BUILD_DUR;
+      var ba = bp < 0.12 ? bp / 0.12 : (bp > 0.82 ? (1 - (bp - 0.82) / 0.18) : 1);
+      ctx.globalAlpha = ba * 0.45;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = ba;
+      var bMeta = buildAnimMeta || { name: '', em: '\uD83D\uDD28' };
+      var bob = Math.abs(Math.sin(bp * Math.PI * 5)) * 10;
+      var rot = Math.sin(bp * Math.PI * 5) * 0.25;
+      ctx.save();
+      ctx.translate(W / 2, H * 0.40);
+      ctx.rotate(rot);
+      ctx.font = '40px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bMeta.em || '\uD83D\uDD28', 0, bob);
+      ctx.restore();
+      // 冲击波圈
+      if (bp > 0.15 && bp < 0.85) {
+        var ring = ((bp - 0.15) % 0.28) / 0.28;
+        ctx.globalAlpha = ba * (1 - ring) * 0.5;
+        ctx.strokeStyle = '#F2D5A0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(W / 2, H * 0.40, 18 + ring * 46, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = ba;
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.fillText('建造中 · ' + (bMeta.name || ''), W / 2, H * 0.40 + 48);
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText('叮叮——营地又结实了一点', W / 2, H * 0.40 + 72);
       ctx.globalAlpha = 1;
     }
   };

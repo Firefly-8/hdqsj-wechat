@@ -98,34 +98,57 @@
       }
     }
 
-    // 标题（上移至顶部，给背景图中间的孤岛剪影让出空间）
+    // V1.16: 标题淡入 + 轻微呼吸；按钮脉冲；边缘暗角
+    var homeAge = (Game._homeT0 != null) ? (t - Game._homeT0) : 0;
+    if (Game._homeT0 == null) Game._homeT0 = t;
+    homeAge = Math.max(0, t - Game._homeT0);
+    var fade = Math.min(1, homeAge / 0.7);
+    var breathe = 1 + Math.sin(t * 1.6) * 0.012;
+
+    // 暗角，让封面更有景深
+    var vig = ctx.createRadialGradient(W / 2, H * 0.42, W * 0.15, W / 2, H * 0.5, W * 0.85);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.28)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 6;
+    ctx.globalAlpha = fade;
+    ctx.translate(W / 2, H * 0.15);
+    ctx.scale(breathe, breathe);
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 34px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('绝望岛求生记', W / 2, H * 0.15);
+    ctx.fillText('绝望岛求生记', 0, 0);
     ctx.shadowBlur = 4;
     ctx.font = '13px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillText('鲁滨逊的漂流', W / 2, H * 0.15 + 30);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillText('鲁滨逊的漂流', 0, 30);
     ctx.restore();
 
-    // 开始按钮（下移至底部，避免遮挡背景主体）
+    // 开始按钮（呼吸缩放）
     var bw = 200, bh = 52, bx = (W - bw) / 2, by = H * 0.74;
+    var pulse = 1 + Math.sin(t * 2.2) * 0.025;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, fade + 0.15);
+    ctx.translate(W / 2, by + bh / 2);
+    ctx.scale(pulse, pulse);
+    ctx.translate(-W / 2, -(by + bh / 2));
     ctx.fillStyle = C.btnShadow;
     roundRect(ctx, bx, by + 6, bw, bh, 26);
     ctx.fill();
     btn(ctx, bx, by, bw, bh, Game.App.startLabel(), C.fire, '#FFFFFF', true, Game.pressed === 'start', 26, 17);
+    ctx.restore();
     hit(bx, by, bw, bh + 6, function () { Game.App.onStart(); });
 
-    // 副标题（按钮正下方）
     ctx.save();
+    ctx.globalAlpha = fade * 0.9;
     ctx.shadowColor = 'rgba(0,0,0,0.4)';
     ctx.shadowBlur = 4;
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -147,23 +170,32 @@
       ctx.fillRect(0, 0, W, H);
     }
 
-    // 船：颠簸旋转（对应 .cg-boat boat 动画）
+    // V1.16: 船颠簸带倾斜；打字光标闪烁
     var cg = Game.cg;
     if (cg && cg.boatY !== undefined) {
-      // 船已下沉（阶段2）：由 sinkStart 平滑驱动下沉淡出（修复原死代码 cg.sink 直接置1导致无动画）
       var sink = cg.sinkStart ? Math.min(1, Math.max(0, (t - cg.sinkStart) / 0.8)) : 0;
-      ctx.globalAlpha = Math.max(0, 1 - sink);
+      // ease sink
+      var se = 1 - Math.pow(1 - sink, 3);
+      ctx.globalAlpha = Math.max(0, 1 - se);
+      ctx.save();
+      ctx.translate(W / 2, H * 0.4 + (cg.boatY || 0) + se * 52);
+      ctx.rotate(Math.sin(t * 2.2) * 0.08 + se * 0.35);
       ctx.font = '56px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('\uD83D\uDEB2', W / 2, H * 0.4 + cg.boatY + sink * 40);
+      ctx.fillText('\uD83D\uDEB2', 0, 0);
+      ctx.restore();
       ctx.globalAlpha = 1;
     } else {
-      var sway = Math.sin(t * 2.8);
+      var sway = Math.sin(t * 2.4);
+      ctx.save();
+      ctx.translate(W / 2 + sway * 10, H * 0.4 + sway * 7);
+      ctx.rotate(sway * 0.12);
       ctx.font = '56px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('\uD83D\uDEB2', W / 2 + sway * 8, H * 0.4 + sway * 6);
+      ctx.fillText('\uD83D\uDEB2', 0, 0);
+      ctx.restore();
     }
 
     // 波浪（横移）
@@ -182,7 +214,7 @@
       ctx.fill();
     }
 
-    // 打字文案（对应 .cg-text，逐字）
+    // 打字文案 + 闪烁光标
     if (cg) {
       ctx.fillStyle = 'rgba(255,255,255,0.92)';
       ctx.font = '15px sans-serif';
@@ -190,7 +222,10 @@
       ctx.textBaseline = 'middle';
       var lines = cg.shown.split('\n');
       for (var li = 0; li < lines.length; li++) {
-        ctx.fillText(lines[li], W / 2, H * 0.68 + li * 26);
+        var line = lines[li];
+        var isLast = li === lines.length - 1;
+        var cursor = (isLast && !cg.started && Math.floor(t * 2) % 2 === 0) ? '|' : '';
+        ctx.fillText(line + cursor, W / 2, H * 0.68 + li * 26);
       }
     }
 
