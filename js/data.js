@@ -42,8 +42,9 @@
   var L2_BONUS = [2, 12, 22];
 
   // 场景背景图（绘本风，与网页 Demo 一致：首页海面 / CG 夜海 / 主界面海滩营地）
+  // V1.15: 背景改 JPEG 降包体（原 PNG 合计约 1.17MB → JPG 约 0.30MB）
   var BG_IMG = {
-    home: 'bg_home.png', cg: 'bg_cg.png', beach: 'bg_beach.png'
+    home: 'bg_home.jpg', cg: 'bg_cg.jpg', beach: 'bg_beach.jpg'
   };
 
   // V1.6 科技树结构（4 分支，每分支 5 级，结局放在第 5 级，内容更丰富、通关更久）
@@ -53,9 +54,9 @@
       name: '防御',
       em: '\uD83E\uDDF1',
       nodes: [
-        { id: 101, name: '栅栏围墙', em: '\uD83E\uDDF1', need: { 3: 1, 23: 1 }, desc: '防御 +10', unlocks: '', prev: 0 },
-        { id: 102, name: '木桩阵', em: '\uD83E\uDD94', need: { 3: 2, 23: 1, 1: 3 }, desc: '防御 +15', unlocks: '', prev: 101 },
-        { id: 103, name: '箭塔', em: '\uD83C\uDFF9', need: { 3: 2, 23: 2, 14: 1 }, desc: '防御 +20', unlocks: '', prev: 102 },
+        { id: 101, name: '栅栏围墙', em: '\uD83E\uDDF1', need: { 3: 1, 23: 1 }, desc: '野兽战败损失减半', unlocks: 'def1', prev: 0 },
+        { id: 102, name: '木桩阵', em: '\uD83E\uDD94', need: { 3: 2, 23: 1, 1: 3 }, desc: '野兽战只需 1 浮木', unlocks: 'def2', prev: 101 },
+        { id: 103, name: '箭塔', em: '\uD83C\uDFF9', need: { 3: 2, 23: 2, 14: 1 }, desc: '野兽来袭可无损击退', unlocks: 'def3', prev: 102 },
         { id: 104, name: '瞭望塔', em: '\uD83D\uDC41', need: { 3: 3, 23: 2, 14: 1 }, desc: '哨塔值守，体力上限 +3', unlocks: 'energy', prev: 103 },
         { id: 105, name: '烽火台', em: '\uD83D\uDD25', need: { 3: 3, 23: 3, 14: 2 }, desc: '结局：部落发现', unlocks: 'end_defense', prev: 104 }
       ]
@@ -65,8 +66,8 @@
       name: '采集',
       em: '\uD83C\uDFA3',
       nodes: [
-        { id: 111, name: '结绳', em: '\uD83E\uDEA2', need: { 1: 3 }, desc: '采集效率 +15%', unlocks: '', prev: 0 },
-        { id: 112, name: '渔网', em: '\uD83D\uDD78\uFE0F', need: { 2: 2, 1: 5 }, desc: '采集效率 +25%', unlocks: '', prev: 111 },
+        { id: 111, name: '结绳', em: '\uD83E\uDEA2', need: { 1: 3 }, desc: '采集工具 Lv2（更高品质）', unlocks: '', prev: 0 },
+        { id: 112, name: '渔网', em: '\uD83D\uDD78\uFE0F', need: { 2: 2, 1: 5 }, desc: '采集工具 Lv3（更高品质）', unlocks: '', prev: 111 },
         { id: 113, name: '陷阱', em: '\uD83E\uDEA4', need: { 3: 1, 2: 2, 22: 2 }, desc: '采集效率 +35%，常获额外收获', unlocks: 'gather', prev: 112 },
         { id: 114, name: '盐田', em: '\uD83E\uDDC2', need: { 2: 3, 22: 2, 14: 1 }, desc: '腌制保鲜，饱食上限 +5', unlocks: 'foodcap', prev: 113 },
         { id: 115, name: '诱捕阵', em: '\uD83E\uDEA9', need: { 3: 2, 2: 3, 22: 2, 14: 2 }, desc: '结局：捕获商船', unlocks: 'end_gather', prev: 114 }
@@ -89,10 +90,10 @@
       name: '探索',
       em: '\uD83D\uDED1',
       nodes: [
-        { id: 131, name: '风筝', em: '\uD83E\uDE81', need: { 1: 2, 2: 1 }, desc: '探索范围 +1', unlocks: '', prev: 0 },
-        { id: 132, name: '信号镜', em: '\uD83E\uDE9E', need: { 2: 2, 22: 1, 14: 1 }, desc: '探索范围 +2', unlocks: '', prev: 131 },
+        { id: 131, name: '风筝', em: '\uD83E\uDE81', need: { 1: 2, 2: 1 }, desc: '空手率再降约 8%', unlocks: 'exp1', prev: 0 },
+        { id: 132, name: '信号镜', em: '\uD83E\uDE9E', need: { 2: 2, 22: 1, 14: 1 }, desc: '采集高品质概率提升', unlocks: 'exp2', prev: 131 },
         { id: 133, name: '海图', em: '\uD83D\uDDFA\uFE0F', need: { 3: 1, 2: 2, 22: 1 }, desc: '绘制海图，每日漂流瓶 +1', unlocks: 'bottle', prev: 132 },
-        { id: 134, name: '独木舟', em: '\uD83D\uDEF6', need: { 3: 2, 2: 2, 14: 1 }, desc: '探索范围 +3', unlocks: '', prev: 133 },
+        { id: 134, name: '独木舟', em: '\uD83D\uDEF6', need: { 3: 2, 2: 2, 14: 1 }, desc: '空手率再降，探索更稳', unlocks: 'exp3', prev: 133 },
         { id: 135, name: '木筏', em: '\uD83D\uDEA4', need: { 3: 3, 2: 3, 14: 2 }, desc: '结局：自制木筏', unlocks: 'end_explore', prev: 134 }
       ]
     }
@@ -102,7 +103,8 @@
   var STAGES = TECH_TREES[0].nodes.concat(TECH_TREES[1].nodes).concat(TECH_TREES[2].nodes).concat(TECH_TREES[3].nodes);
 
   // 体力恢复间隔（demo 用 30s 便于体验；上线前调回 3-5 分钟）
-  var E_INTERVAL = 30000;
+  // V1.15: 上线节奏——体力自然恢复 30s → 3 分钟（README 建议 3–5 分钟）
+  var E_INTERVAL = 180000;
 
   // 采集空手文案库（20 条，鲁滨逊风口语）
   var MISS_LINES = [
@@ -189,7 +191,8 @@
   var CG_TEXT = '狂风骤雨，船触了礁。\n我醒来时，已在一片陌生的沙滩。\n1659 年 9 月 30 日，我在此上岸。';
 
   // 空手概率（demo 25% 便于体验文案；上线调回 8-12%）
-  var MISS_RATE = 0.25;
+  // V1.15: 空手率 Demo 档 25% → 10%（README 建议 8–12%）
+  var MISS_RATE = 0.10;
 
   // 每日漂流瓶数量（demo 固定 3；正式可按 1-3 随机）
   var DAILY_BOTTLE = 3;

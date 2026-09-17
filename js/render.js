@@ -447,6 +447,20 @@
     var timerTxt = Game.App.energyTimerText();
     if (timerTxt && !animating) gLabel += ' ' + timerTxt;
     btn(ctx, 10, ay, gatherW, 42, gLabel, C.fire, '#FFFFFF', gatherActive, pressed === 'gather', 10, 13);
+    // V1.15: 目标提示条
+    if (Game.App.getGoalHint && Game.tab === 'board') {
+      var goal = Game.App.getGoalHint();
+      ctx.save();
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(74,52,40,0.88)';
+      roundRect(ctx, 10, ay - 22, W - 20, 18, 8);
+      ctx.fill();
+      ctx.fillStyle = '#FAF1DD';
+      ctx.fillText(goal.length > 28 ? goal.slice(0, 28) + '\u2026' : goal, 18, ay - 13);
+      ctx.restore();
+    }
     hit(10, ay, gatherW, 42, function () { Game.App.gather(); });
     btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83C\uDF7E 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
     hit(10 + gatherW + 6, ay, bottleW, 42, function () { Game.App.bottle(); });
@@ -467,11 +481,8 @@
     var hungry = fInfo && fInfo.isHungry;
     btn(ctx, 10 + btnW + btnGap, ay2, btnW, 28, canCook ? ('\uD83D\uDD25 烹饪 (' + cookHave + ')') : (hungry ? '\uD83D\uDD25 饿！快去合成' : '\uD83D\uDD25 烹饪不足'), C.fire, '#FFFFFF', canCook, pressed === 'cook', 8, 11);
     hit(10 + btnW + btnGap, ay2, btnW, 28, function () { Game.App.cookFood(); });
-    // 分享按钮：每天10次，+3体力
-    var shareInfo = Game.App.getShareInfo ? Game.App.getShareInfo() : null;
-    var shareLeft = shareInfo ? shareInfo.left : 0;
-    var canShare = shareLeft > 0;
-    btn(ctx, 10 + (btnW + btnGap) * 2, ay2, btnW, 28, canShare ? ('\uD83D\uDD14 分享 +3 (' + shareLeft + ')') : '\uD83D\uDD14 已用完', C.sea, '#FFFFFF', canShare, pressed === 'share', 8, 11);
+    // V1.15: 分享纯传播，无体力奖励
+    btn(ctx, 10 + (btnW + btnGap) * 2, ay2, btnW, 28, '\uD83D\uDD14 分享', C.sea, '#FFFFFF', true, pressed === 'share', 8, 11);
     hit(10 + (btnW + btnGap) * 2, ay2, btnW, 28, function () { Game.App.onShare(); });
 
     // Tab 栏（棋盘/建造/日记）抽到公共函数，保证每个 tab 页都有底部导航

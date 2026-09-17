@@ -150,6 +150,12 @@
       S.food = Math.max(0, S.food - days);
       // V1.11: 饥饿使上限减半后，当前体力需同步收敛，否则会出现「20/10」这种越界显示
       S.energy = Math.min(S.energy, effectiveMaxEnergy());
+      // V1.15: 自然日流逝也推进生存天数（建造仍会 +1），彩蛋/季节不只靠猛建
+      if (days > 0) {
+        S.day += days;
+        S.totalDays += days;
+        recomputeDiary();
+      }
     }
   }
   // V1.1: 获取当前天气信息
@@ -175,7 +181,8 @@
     if (S.eventDone || S.day < 2) return; // 第1天不触发
     // V1.12: 原著事件一次性、错过不再 —— 满足条件时优先弹（命中率 60%）
     var lore = loreEventPool();
-    var useLore = lore.length > 0 && Math.random() < 0.6;
+    // V1.15: 有未读原著彩蛋时优先弹出（90%）
+    var useLore = lore.length > 0 && Math.random() < 0.9;
     var pool = useLore ? lore : D.EVENTS.slice();
     // 随机选择 1-2 个事件（原著事件一次只弹一个，避免挤掉主线事件）
     var eventCount = useLore ? 1 : (Math.random() < 0.3 ? 2 : 1);
@@ -218,42 +225,50 @@
     var wx = D.WEATHER;
     // 处理各事件选项
     if (cb === 'beast_fight') {
-      // 战斗：消耗 2 浮木
-      // V1.11机制修复: 原实现「边扣边判」—— 只有 1 个浮木时，那 1 个会先被扣掉，
-      //   随后 removed<2 又走失败分支再扣 2 个随机资源，净损失 3 个，而提示只说「损失 2 个资源」。
-      //   现先校验数量，不足则完全不扣浮木，直接进失败分支。
-      if (countItem(1) >= 2) {
-        var removed = 0;
-        for (var i = S.space - 1; i >= 0 && removed < 2; i--) {
-          if (S.board[i] === 1) { S.board[i] = 0; removed++; }
-        }
-        Game.FX.toast('战斗胜利！消耗 2 浮木');
+      // V1.15: 防御科技 —— Lv3 无损 / Lv2 只需1浮木 / Lv1 战败损失减半
+      var defLv = getDefenseLevel();
+      if (defLv >= 3) {
+        Game.FX.toast('箭塔开火，野兽被赶跑了！');
       } else {
-        // V1.10机制修复: 原「物资散落」无任何惩罚 = 战斗必胜（而逃跑必掉资源）→ 选项严重失衡
-        // 改为：没有武器(浮木)硬刚野兽 → 战斗失败，损失 2 个随机资源
-        var lostIdx = [];
-        for (var li = 0; li < S.space; li++) if (S.board[li]) lostIdx.push(li);
-        var lostCount = 0;
-        for (var lk = 0; lk < 2 && lostIdx.length > 0; lk++) {
-          var ri = Math.floor(Math.random() * lostIdx.length);
-          S.board[lostIdx[ri]] = 0;
-          lostIdx.splice(ri, 1);
-          lostCount++;
+        var needWood = defLv >= 2 ? 1 : 2;
+        if (countItem(1) >= needWood) {
+          var removed = 0;
+          for (var i = S.space - 1; i >= 0 && removed < needWood; i--) {
+            if (S.board[i] === 1) { S.board[i] = 0; removed++; }
+          }
+          Game.FX.toast(needWood === 1 ? '木桩阵奏效！消耗 1 浮木击退野兽' : '战斗胜利！消耗 2 浮木');
+        } else {
+          var loseN = defLv >= 1 ? 1 : 2;
+          var lostIdx = [];
+          for (var li = 0; li < S.space; li++) if (S.board[li]) lostIdx.push(li);
+          var lostCount = 0;
+          for (var lk = 0; lk < loseN && lostIdx.length > 0; lk++) {
+            var ri = Math.floor(Math.random() * lostIdx.length);
+            S.board[lostIdx[ri]] = 0;
+            lostIdx.splice(ri, 1);
+            lostCount++;
+          }
+          Game.FX.toast(lostCount > 0
+            ? ('浮木不足，被野兽冲散！损失 ' + lostCount + ' 个资源' + (defLv >= 1 ? '（栅栏减轻了损失）' : ''))
+            : '浮木不足，所幸没丢东西');
         }
-        Game.FX.toast(lostCount > 0 ? ('浮木不足，被野兽冲散！损失 ' + lostCount + ' 个资源') : '浮木不足，所幸没丢东西');
       }
     } else if (cb === 'beast_flee') {
-      // 逃跑：损失 1 随机资源
-      var haveItems = [];
-      for (var j = 0; j < S.space; j++) { if (S.board[j]) haveItems.push(j); }
-      if (haveItems.length > 0) {
-        var randIdx = haveItems[Math.floor(Math.random() * haveItems.length)];
-        S.board[randIdx] = 0;
-        Game.FX.toast('逃跑时掉落了 1 个资源！');
+      var defLv2 = getDefenseLevel();
+      if (defLv2 >= 2 || (defLv2 >= 1 && Math.random() < 0.5)) {
+        Game.FX.toast(defLv2 >= 2 ? '木桩掩护下撤出，没有损失' : '栅栏挡住了追击，安全脱身');
       } else {
-        Game.FX.toast('逃跑成功，但啥也没掉。');
+        var haveItems = [];
+        for (var j = 0; j < S.space; j++) { if (S.board[j]) haveItems.push(j); }
+        if (haveItems.length > 0) {
+          var randIdx = haveItems[Math.floor(Math.random() * haveItems.length)];
+          S.board[randIdx] = 0;
+          Game.FX.toast('逃跑时掉落了 1 个资源！');
+        } else {
+          Game.FX.toast('逃跑成功，但啥也没掉。');
+        }
       }
-    } else if (cb === 'ruins_claim') {
+        } else if (cb === 'ruins_claim') {
       // 遗迹：获得随机 L1 材料 × 2
       // V1.11机制修复: 原实现棋盘满时静默丢弃，toast 仍报「获得 2 个资源」（谎报）
       var gotRuins = 0;
@@ -395,8 +410,13 @@
     S._offlineSec = Math.max(0, (now - (S.lastTs || now)) / 1000);
     // 离线补体力（按真实时间戳）
     if (S.energyTs) {
-      var add = Math.floor((now - S.energyTs) / D.E_INTERVAL);
-      // V1.11: 上限改用 effectiveMaxEnergy（饥饿时不该补到减半前的上限）
+      // V1.15: 离线补体力与 tryTickEnergy 同一套天气倍率（风暴不回体）
+      var wLoad = getWeatherInfo();
+      var add = 0;
+      if (wLoad && wLoad.energyRate) {
+        var offlineInterval = D.E_INTERVAL / wLoad.energyRate;
+        add = Math.floor((now - S.energyTs) / offlineInterval);
+      }
       S.energy = Math.min(effectiveMaxEnergy(), (S.energy || 0) + add);
     }
     S.energyTs = now;
@@ -439,6 +459,49 @@
     Game.FX.toast(arr[Math.floor(Math.random() * arr.length)], kind === 'miss' ? 2400 : 1600);
   }
   // V1.5: 获取当前采集工具等级（基于已建造的科技节点）
+  // V1.15 上线：防御/探索等级（虚文案 → 硬效果）
+  function getDefenseLevel() {
+    if (S.stages.indexOf(103) >= 0) return 3;
+    if (S.stages.indexOf(102) >= 0) return 2;
+    if (S.stages.indexOf(101) >= 0) return 1;
+    return 0;
+  }
+  function getExploreLevel() {
+    var n = 0;
+    if (S.stages.indexOf(131) >= 0) n++;
+    if (S.stages.indexOf(132) >= 0) n++;
+    if (S.stages.indexOf(134) >= 0) n++;
+    return n;
+  }
+  function getGoalHint() {
+    var best = null;
+    for (var t = 0; t < D.TECH_TREES.length; t++) {
+      var tree = D.TECH_TREES[t];
+      if (S.lockedTrees && S.lockedTrees.indexOf(tree.id) >= 0) continue;
+      for (var n = 0; n < tree.nodes.length; n++) {
+        var st = tree.nodes[n];
+        if (S.stages.indexOf(st.id) >= 0) continue;
+        if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
+        var short = [];
+        var can = true;
+        for (var id in st.need) {
+          var have = countItem(+id);
+          var need = st.need[id];
+          if (have < need) {
+            can = false;
+            short.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + '\u00D7' + (need - have));
+          }
+        }
+        var tip = can
+          ? ('可建造：' + st.name + '（打开「建造」）')
+          : ('下一目标：' + st.name + '，还差 ' + short.slice(0, 3).join('\u3001'));
+        if (can) return tip;
+        if (!best) best = tip;
+        break;
+      }
+    }
+    return best || '点采集收资源，3 个同类自动合成升级';
+  }
   function getGatherLevel() {
     var level = 1;
     // 采集分支：结绳(111) → 渔网(112) → 陷阱(113)
@@ -467,6 +530,10 @@
       p[2] = Math.min(0.5, p[2] + 0.05);
       p[0] = Math.max(0.1, p[0] - 0.05);
     }
+    if (getExploreLevel() >= 2) {
+      p[2] = Math.min(0.55, p[2] + 0.05);
+      p[0] = Math.max(0.08, p[0] - 0.05);
+    }
     var r = Math.random();
     // V1.5: 额外概率获得概率食物（椰子等）：挖到直接恢复体力，概率稍低
     if (r < 0.1) {
@@ -486,7 +553,9 @@
     if (S.gatherBonus) rate *= 0.8; // V1.6: 陷阱解锁后空手率再降 20%
     // V1.12: 巨杉独木舟的教训（原著第6年造大船拖不下海）→ 之后采集少走弯路
     if (S.canoeLesson) rate *= 0.85;
-    return Math.max(0.12, rate - 0.05); // V1.2: 整体 -5% 空手
+    var expLv = getExploreLevel();
+    if (expLv > 0) rate *= Math.pow(0.92, expLv);
+    return Math.max(0.05, rate);
   }
   // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
   function processGatherResult(pos) {
@@ -505,7 +574,8 @@
     if (result.type === 'food') {
       // 椰子等概率食物：挖到直接恢复 1-2 点体力（概率较低）
       var gain = Math.floor(Math.random() * 2) + 1;
-      S.energy = Math.min(S.maxEnergy, S.energy + gain);
+      // V1.15: 与 tryTickEnergy 一致，饥饿时不得突破 effectiveMaxEnergy
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + gain);
       S.board[pos] = result.id; // 同时作为食物留在棋盘
       Game.FX.floaty('\uD83E\uDD65 +' + gain + '体力', cx, cy);
       Game.FX.toast('发现椰果！体力 +' + gain);
@@ -527,13 +597,19 @@
     // V1.1: 风暴天禁止采集
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
-    if (S.energy <= 0) { Game.FX.toast('体力不足，看广告恢复'); return; }
+    if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; } // V1.15: 前期无广告，去掉误导文案
     var pos = firstEmpty();
     if (pos < 0) { emptyLine('full'); return; } // 棋盘满
     // 扣体力（晴天惊喜可免）
     var energyCost = S._sunnyGift ? 0 : 1;
     S._sunnyGift = false;
     S.energy -= energyCost;
+    if (S.guideStep === 1) {
+      S.guideStep = 2;
+      setTimeout(function () {
+        Game.FX.toast('\u2461 \u6492\u6EE1\u6750\u6599\u540E\u6253\u5F00\u300C\u5EFA\u9020\u300D\n\u5148\u5EFA\u5E87\u62A4\u6240\uFF0C\u53EF\u9886\u79BB\u7EBF\u6536\u76CA');
+      }, 2600);
+    }
     save();
     // 预判定空手率，但动画期间不揭晓，结束后再给反馈（更有「挖掘」代入感）
     var isMiss = Math.random() < computeMissRate();
@@ -660,6 +736,7 @@
     recomputeDiary(); // V1.9: 天数推进后刷新日记解锁
     save();
     // 天数过渡动画 → 营地升级光晕 → 提示
+    if (S.guideStep) { S.guideStep = 0; S.guideDone = true; }
     Game.FX.dayTransition(S.day, function () {
       Game.FX.campUp();
       Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
@@ -1071,8 +1148,10 @@
           body: '你离开了 ' + Math.floor(S._offlineSec / 60) + ' 分钟\n营地为你攒下了 ' + S._offlineReward + ' 个资源',
           buttons: offlineBtns
         });
-      } else if (S.stages.indexOf(1) < 0 && S.day === 1) {
-        Game.FX.toast('\u70B9\u91C7\u96C6\u6536\u96C6\u8D44\u6E90\uFF0C3\u4E2A\u540C\u7C7B\u81EA\u52A8\u5408\u6210\u5347\u7EA7');
+      } else if (S.stages.length === 0 && S.day === 1) {
+        // V1.15: 修复 stages.indexOf(1) 废条件；首局弱引导
+        S.guideStep = 1;
+        Game.FX.toast('\u2460 \u70B9\u300C\u91C7\u96C6\u300D\u6536\u8D44\u6E90\n\u4E09\u4E2A\u540C\u7C7B\u4F1A\u81EA\u52A8\u5408\u6210\u5347\u7EA7');
         triggerDailyEvent();
       } else {
         // V1.1: 触发每日随机事件
@@ -1277,6 +1356,27 @@
   }
 
   // ============ 启动 ============
+  // V1.15: 切后台存档；回前台重算离线
+  try {
+    if (typeof wx !== 'undefined' && wx.onHide) wx.onHide(function () { save(); });
+    if (typeof wx !== 'undefined' && wx.onShow) {
+      wx.onShow(function () {
+        var prevScene = Game.scene;
+        load();
+        calcOffline();
+        Game.S = S;
+        if (prevScene === 'game' && S.offlineUnclaimed && S._offlineReward > 0 && !Game.modal) {
+          openModal({
+            title: '\uD83C\uDF0A \u6B22\u8FCE\u56DE\u5230\u8352\u5C9B',
+            body: '你离开了 ' + Math.floor(S._offlineSec / 60) + ' 分钟\n营地为你攒下了 ' + S._offlineReward + ' 个资源',
+            buttons: [
+              { label: '直接领取', primary: true, cb: function () { closeModal(); grantOffline(S._offlineReward); triggerDailyEvent(); } }
+            ]
+          });
+        }
+      });
+    }
+  } catch (eLife) {}
   App.start = function () {
     load();
     calcOffline();
@@ -1332,6 +1432,9 @@
   App.boardUsed = boardUsed;
   App.energyTimerText = energyTimerText;
   App.campTagText = campTagText;
+  App.getGoalHint = getGoalHint;
+  App.getDefenseLevel = getDefenseLevel;
+  App.getExploreLevel = getExploreLevel;
   App.offlineUnclaimed = function () { return S.offlineUnclaimed; };
   App.onAdEnergy = onAdEnergy;
   App.onAdOffline = onAdOffline;
@@ -1372,31 +1475,19 @@
     Game.FX.toast('\uD83D\uDC4F 休息恢复 +2 体力');
     save();
   };
-  // V1.5: 分享功能（每天10次，+3体力）
+  // V1.15 上线：分享改为纯传播，不再发体力（规避诱导分享）
   App.getShareInfo = function () {
-    var today = new Date().toDateString();
-    if (S._shareDate !== today) {
-      S._shareDate = today;
-      S._shareCount = 10;
-    }
-    return { left: S._shareCount || 0 };
+    return { left: 1, rewarded: false };
   };
   App.onShare = function () {
-    var info = App.getShareInfo();
-    if (info.left <= 0) { Game.FX.toast('今日分享次数已用完'); return; }
-    // V1.11: 满体力时不再白白消耗次数；上限改用 effectiveMaxEnergy
-    var cap = effectiveMaxEnergy();
-    if (S.energy >= cap) { Game.FX.toast('体力已满，先去采集吧'); return; }
-    S._shareCount--;
-    S.energy = Math.min(cap, S.energy + 3);
-    S.energyTs = Date.now();
-    Game.FX.toast('\uD83D\uDD14 分享成功 +3 体力');
-    save();
-    // V1.11机制修复: 补上真实转发调用 —— 原实现只改本地数值，真机上点「分享」不会有任何反应
-    // （分享面板是否发出由玩家决定，奖励即发；上架前需自查是否触碰平台「诱导分享」红线）
     try {
-      if (wx.shareAppMessage) wx.shareAppMessage({ title: '我在绝望岛上活到了第 ' + S.day + ' 天' });
-    } catch (e) {}
+      if (wx.shareAppMessage) {
+        wx.shareAppMessage({ title: '我在绝望岛上活到了第 ' + S.day + ' 天' });
+      }
+      Game.FX.toast('\uD83D\uDD14 已调起分享');
+    } catch (e) {
+      Game.FX.toast('当前环境暂不支持分享');
+    }
   };
   // V1.10: 导出烹饪（此前 cookFood 未导出 → 渲染层无入口，饱食度无法恢复）
   App.cookFood = cookFood;
