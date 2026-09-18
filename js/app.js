@@ -51,7 +51,11 @@
       // V1.12 原著改编层：一次性事件记录 / 鹦鹉 Poll / 巨杉独木舟的教训
       eventsSeen: [], parrot: false, canoeLesson: false,
       // V1.13 原著细节彩蛋：烟斗 / 金币 / 赶走猫 / 埋了狗
-      pipe: false, coins: false, noCats: false, dogBuried: false
+      pipe: false, coins: false, noCats: false, dogBuried: false,
+      // V1.18: 采集地点常驻（默认岸边）
+      gatherZone: 'shore',
+      // V1.19 脚印/星期五弧
+      footprintSeen: false, friday: false, fridayBond: false
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -120,6 +124,22 @@
         cum += probs[i];
         if (r < cum) { S.weather = D.WEATHER[i].type; break; }
       }
+      // V1.18: 风暴日轻后果 —— 无庇护所时可能被掀翻 1 格物资
+      if (S.weather === 2 && S.stages.indexOf(121) < 0) {
+        var stormLost = [];
+        for (var sj = 0; sj < S.space; sj++) if (S.board[sj]) stormLost.push(sj);
+        if (stormLost.length && Math.random() < 0.55) {
+          var sri = stormLost[Math.floor(Math.random() * stormLost.length)];
+          S.board[sri] = 0;
+          S._stormNote = '风暴掀翻营地，丢失 1 份物资（建庇护所可避）';
+        } else {
+          S._stormNote = '风暴封路，今日无法外出采集';
+        }
+      } else if (S.weather === 2) {
+        S._stormNote = '风暴封路，庇护所替你挡住了最坏的情况';
+      } else {
+        S._stormNote = '';
+      }
     }
   }
   // V1.1: 每日事件刷新
@@ -172,6 +192,9 @@
       var ev = D.LORE_EVENTS[i];
       if (S.eventsSeen && S.eventsSeen.indexOf(ev.id) >= 0) continue;
       if (S.day < (ev.dayMin || 0)) continue;
+      // V1.19: 弧光前置（追查脚印 → footprintSeen → 炊烟/星期五）
+      if (ev.requireSeen && !(S.eventsSeen && S.eventsSeen.indexOf(ev.requireSeen) >= 0)) continue;
+      if (ev.requireFlag && !S[ev.requireFlag]) continue;
       out.push(ev);
     }
     return out;
@@ -187,6 +210,16 @@
     // 随机选择 1-2 个事件（原著事件一次只弹一个，避免挤掉主线事件）
     var eventCount = useLore ? 1 : (Math.random() < 0.3 ? 2 : 1);
     var shuffled = pool.slice().sort(function () { return Math.random() - 0.5; });
+    // V1.18: 非彩蛋日提高野兽出现感（约 40% 把野兽置顶）
+    if (!useLore && Math.random() < 0.4) {
+      for (var bi = 0; bi < shuffled.length; bi++) {
+        if (shuffled[bi].id === 'beast') {
+          var bEv = shuffled.splice(bi, 1)[0];
+          shuffled.unshift(bEv);
+          break;
+        }
+      }
+    }
     var selected = shuffled.slice(0, eventCount);
     // 标记原著事件已出现（once 语义）
     if (!S.eventsSeen) S.eventsSeen = [];
@@ -224,34 +257,64 @@
     closeModal();
     var wx = D.WEATHER;
     // 处理各事件选项
-    if (cb === 'beast_fight') {
-      // V1.15: 防御科技 —— Lv3 无损 / Lv2 只需1浮木 / Lv1 战败损失减半
-      var defLv = getDefenseLevel();
-      if (defLv >= 3) {
-        Game.FX.toast('箭塔开火，野兽被赶跑了！');
-      } else {
-        var needWood = defLv >= 2 ? 1 : 2;
-        if (countItem(1) >= needWood) {
-          var removed = 0;
-          for (var i = S.space - 1; i >= 0 && removed < needWood; i--) {
-            if (S.board[i] === 1) { S.board[i] = 0; removed++; }
-          }
-          Game.FX.toast(needWood === 1 ? '木桩阵奏效！消耗 1 浮木击退野兽' : '战斗胜利！消耗 2 浮木');
-        } else {
-          var loseN = defLv >= 1 ? 1 : 2;
-          var lostIdx = [];
-          for (var li = 0; li < S.space; li++) if (S.board[li]) lostIdx.push(li);
-          var lostCount = 0;
-          for (var lk = 0; lk < loseN && lostIdx.length > 0; lk++) {
-            var ri = Math.floor(Math.random() * lostIdx.length);
-            S.board[lostIdx[ri]] = 0;
-            lostIdx.splice(ri, 1);
-            lostCount++;
-          }
-          Game.FX.toast(lostCount > 0
-            ? ('浮木不足，被野兽冲散！损失 ' + lostCount + ' 个资源' + (defLv >= 1 ? '（栅栏减轻了损失）' : ''))
-            : '浮木不足，所幸没丢东西');
+    if (cb === 'beast_safe') {
+      // V1.18: 稳守 —— 必过，耗 1 体力或 1 浮木
+      var defLvS = getDefenseLevel();
+      if (defLvS >= 3) {
+        Game.FX.toast('箭塔值守，稳稳扛过，无损。');
+      } else if (countItem(1) >= 1) {
+        for (var si = S.space - 1; si >= 0; si--) {
+          if (S.board[si] === 1) { S.board[si] = 0; break; }
         }
+        Game.FX.toast('稳守成功，消耗 1 浮木堵住缺口');
+      } else {
+        S.energy = Math.max(0, S.energy - 1);
+        Game.FX.toast('没有浮木可挡，你硬扛过去，体力 -1');
+      }
+    } else if (cb === 'beast_risk') {
+      // V1.18: 冒险 —— 可能多捞，也可能多赔
+      var defLvR = getDefenseLevel();
+      var winChance = 0.45 + defLvR * 0.15; // 0.45/0.6/0.75/0.9
+      if (Math.random() < winChance) {
+        var gained = 0;
+        for (var gi = 0; gi < 2; gi++) {
+          var gp = firstEmpty();
+          if (gp < 0) break;
+          S.board[gp] = D.L1[Math.floor(Math.random() * 3)];
+          gained++;
+        }
+        autoMerge();
+        Game.FX.toast(gained > 0
+          ? ('冒险得手！野兽留下 ' + gained + ' 份物资')
+          : '冒险得手，但棋盘已满装不下');
+      } else {
+        var loseN = defLvR >= 1 ? 2 : 3;
+        var lostIdx = [];
+        for (var li = 0; li < S.space; li++) if (S.board[li]) lostIdx.push(li);
+        var lostCount = 0;
+        for (var lk = 0; lk < loseN && lostIdx.length > 0; lk++) {
+          var ri = Math.floor(Math.random() * lostIdx.length);
+          S.board[lostIdx[ri]] = 0;
+          lostIdx.splice(ri, 1);
+          lostCount++;
+        }
+        S.energy = Math.max(0, S.energy - 1);
+        Game.FX.toast(lostCount > 0
+          ? ('冒险失手！损失 ' + lostCount + ' 个资源，体力 -1' + (defLvR >= 1 ? '（防御减轻了）' : ''))
+          : '冒险失手，所幸没丢物资，体力 -1');
+      }
+    } else if (cb === 'beast_fight') {
+      // 兼容旧回调名：走稳守
+      var defLvS2 = getDefenseLevel();
+      if (defLvS2 >= 3) Game.FX.toast('箭塔值守，稳稳扛过，无损。');
+      else if (countItem(1) >= 1) {
+        for (var si2 = S.space - 1; si2 >= 0; si2--) {
+          if (S.board[si2] === 1) { S.board[si2] = 0; break; }
+        }
+        Game.FX.toast('稳守成功，消耗 1 浮木堵住缺口');
+      } else {
+        S.energy = Math.max(0, S.energy - 1);
+        Game.FX.toast('没有浮木可挡，你硬扛过去，体力 -1');
       }
     } else if (cb === 'beast_flee') {
       var defLv2 = getDefenseLevel();
@@ -320,17 +383,65 @@
     } else if (cb === 'lore_bigcanoe_skip') {
       Game.FX.toast('你摸了摸树干，转身走了。那根刺还在心里');
     } else if (cb === 'lore_footprint') {
-      // V1.12 原著（约第17年）：他发现沙滩脚印，随后找到人骨与生火痕迹
+      // V1.17/V1.19: 追查脚印 → 开启星期五弧前置
       var gotFp = 0;
       for (var fi = 0; fi < 2; fi++) {
         var fp = firstEmpty();
         if (fp >= 0) { S.board[fp] = 21; gotFp++; }
       }
       S.energy = Math.max(0, S.energy - 2);
-      Game.FX.toast('脚印尽头是一处废弃营地：焦黑的石圈、啃剩的骨头。\n你捡走 ' + gotFp + ' 块石头，体力 -2。\n\n这座岛上，不止你一个人');
+      S.footprintSeen = true;
       autoMerge();
+      save();
+      openModal({
+        title: '\uD83D\uDC63 脚印尽头',
+        body: '废弃营地：焦黑的石圈、啃剩的骨头。\n你捡走 ' + gotFp + ' 块石头，体力 -2。\n\n这座岛上，不止你一个人。\n（之后或将见到炊烟与陌生人）',
+        buttons: [{ label: '知道了', primary: true, cb: function () { closeModal(); } }]
+      });
     } else if (cb === 'lore_footprint_skip') {
       Game.FX.toast('你把沙子抹平，可那天夜里没睡着');
+      // 不开启星期五弧
+    } else if (cb === 'lore_smoke_go') {
+      S.energy = Math.max(0, S.energy - 1);
+      var sg = 0;
+      for (var sgi = 0; sgi < 1; sgi++) {
+        var sp = firstEmpty();
+        if (sp >= 0) { S.board[sp] = 1; sg++; }
+      }
+      autoMerge();
+      Game.FX.toast('烟散了，只剩一圈冷灰。\n你捡回一根未燃尽的浮木。体力 -1\n（有人来过，还会再来）');
+    } else if (cb === 'lore_smoke_hide') {
+      Game.FX.toast('你趴在草丛里看了一下午。\n烟灭了。你记住了那个方向。');
+    } else if (cb === 'lore_friday_save') {
+      S.friday = true;
+      S.footprintSeen = true;
+      S.energy = Math.max(0, S.energy - 2);
+      // 小盟友：当日额外一个初级物
+      var fpos = firstEmpty();
+      if (fpos >= 0) S.board[fpos] = D.L1[Math.floor(Math.random() * 3)];
+      autoMerge();
+      save();
+      openModal({
+        title: '\uD83E\uDD1D Friday',
+        body: '你冲出去大喝一声，追的人散了。\n他趴在沙滩上，后来你才知道——\n那一天是星期五。\n\n你给他取名 Friday。体力 -2。\n（此后采集稍稳，他会帮你）',
+        buttons: [{ label: '知道了', primary: true, cb: function () { closeModal(); } }]
+      });
+    } else if (cb === 'lore_friday_watch') {
+      Game.FX.toast('你握紧火把，没有动。\n潮水上来，沙滩上只剩纷乱脚印。\n（星期五弧就此错过）');
+      // 标记 friday 事件已看过但不结盟 —— eventsSeen 已含 friday
+    } else if (cb === 'lore_friday_work') {
+      S.fridayBond = true;
+      var gotW = 0;
+      for (var wi = 0; wi < 2; wi++) {
+        var wp = firstEmpty();
+        if (wp >= 0) { S.board[wp] = D.L1[Math.floor(Math.random() * 3)]; gotW++; }
+      }
+      autoMerge();
+      Game.FX.toast('Friday 跟着你去岸边，多带回了 ' + gotW + ' 件物资。\n「Yes, Master.」——他只会这一句，却够用了。');
+    } else if (cb === 'lore_friday_rest') {
+      S.fridayBond = true;
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + 2);
+      Game.FX.toast('你让他歇着，自己多干了一气。\n回来时他已生好了火。体力 +2');
     } else if (cb === 'lore_treenight' || cb === 'lore_treenight2') {
       // V1.13 原著：上岸第一夜爬上一棵树睡，通宵下雨却酣睡未醒
       S.energy = Math.min(effectiveMaxEnergy(), S.energy + 1);
@@ -394,9 +505,17 @@
     }
     // V1.9机制修复: 事件不再直接推进日记（日记改由累计天数驱动，避免开局速通解锁）
     save();
-    // 继续显示下一个事件
+    // 继续显示下一个事件（若已弹出结果弹窗，等关闭后再接）
     if (idx + 1 < events.length) {
-      setTimeout(function () { showNextEvent(events, idx + 1); }, 500);
+      if (Game.modal && Game.modal.buttons && Game.modal.buttons[0]) {
+        var prevBtnCb = Game.modal.buttons[0].cb;
+        Game.modal.buttons[0].cb = function () {
+          if (typeof prevBtnCb === 'function') prevBtnCb();
+          setTimeout(function () { showNextEvent(events, idx + 1); }, 200);
+        };
+      } else {
+        setTimeout(function () { showNextEvent(events, idx + 1); }, 500);
+      }
     }
   }
   function load() {
@@ -423,6 +542,9 @@
     dailyBottleReset();
     // V1.1: 每日天气刷新
     dailyWeatherReset();
+    if (S._stormNote) {
+      setTimeout(function () { Game.FX.toast('\u26C8\uFE0F ' + S._stormNote); S._stormNote = ''; save(); }, 600);
+    }
     // V1.1: 每日事件刷新
     dailyEventReset();
     // V1.2: 每日饱食度刷新
@@ -458,6 +580,61 @@
     var arr = kind === 'full' ? D.FULL_LINES : D.MISS_LINES;
     Game.FX.toast(arr[Math.floor(Math.random() * arr.length)], kind === 'miss' ? 2400 : 1600);
   }
+
+  // V1.19: 漂流物
+  function pickFlotsam() {
+    var list = D.FLOTSAM || [];
+    if (!list.length) return null;
+    var total = 0, i;
+    for (i = 0; i < list.length; i++) total += (list[i].w || 1);
+    var r = Math.random() * total, cum = 0;
+    for (i = 0; i < list.length; i++) {
+      cum += (list[i].w || 1);
+      if (r < cum) return list[i];
+    }
+    return list[0];
+  }
+  function grantFlotsam(entry, silentToast) {
+    if (!entry) return;
+    if (entry.kind === 'miss') {
+      if (!silentToast) Game.FX.toast('\uD83C\uDF0A ' + entry.title + '\n' + entry.text);
+      return;
+    }
+    if (entry.kind === 'story') {
+      if (!silentToast) Game.FX.toast('\uD83C\uDF0A ' + entry.title + '\n' + entry.text);
+      return;
+    }
+    if (entry.kind === 'energy') {
+      S.energy = Math.min(effectiveMaxEnergy(), S.energy + (entry.amount || 1));
+      if (!silentToast) Game.FX.toast('\uD83C\uDF0A ' + entry.title + '\n' + entry.text);
+      save();
+      return;
+    }
+    // items
+    var got = 0;
+    var ids = entry.ids || [];
+    for (var k = 0; k < ids.length; k++) {
+      var p = firstEmpty();
+      if (p < 0) break;
+      S.board[p] = ids[k];
+      got++;
+    }
+    autoMerge();
+    save();
+    if (!silentToast) {
+      Game.FX.toast(got > 0
+        ? ('\uD83C\uDF0A 涨潮送来「' + entry.title + '」\n' + entry.text + '\n收入 ' + got + ' 件')
+        : ('\uD83C\uDF0A ' + entry.title + '\n棋盘满了，只能看着它又被浪带走'));
+    }
+  }
+  function maybeShoreFlotsam() {
+    // 岸边采集成功后约 14% 额外冲来漂流物（不耗体力）
+    if (getGatherZoneId() !== 'shore') return;
+    if (Math.random() >= 0.14) return;
+    var e = pickFlotsam();
+    if (e) setTimeout(function () { grantFlotsam(e); }, 500);
+  }
+
   // V1.5: 获取当前采集工具等级（基于已建造的科技节点）
   // V1.15 上线：防御/探索等级（虚文案 → 硬效果）
   function getDefenseLevel() {
@@ -472,6 +649,52 @@
     if (S.stages.indexOf(132) >= 0) n++;
     if (S.stages.indexOf(134) >= 0) n++;
     return n;
+  }
+  // V1.17: 可建造节点（红点 / 主动提示）
+  function getReadyBuildIds() {
+    var ids = [];
+    for (var t = 0; t < D.TECH_TREES.length; t++) {
+      var tree = D.TECH_TREES[t];
+      if (S.lockedTrees && S.lockedTrees.indexOf(tree.id) >= 0) continue;
+      for (var n = 0; n < tree.nodes.length; n++) {
+        var st = tree.nodes[n];
+        if (S.stages.indexOf(st.id) >= 0) continue;
+        if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
+        var can = true;
+        for (var id in st.need) {
+          if (countItem(+id) < st.need[id]) { can = false; break; }
+        }
+        if (can) ids.push(st.id);
+      }
+    }
+    return ids;
+  }
+  function hasReadyBuild() { return getReadyBuildIds().length > 0; }
+  function notifyIfNewReady() {
+    if (!S._readyNotified) S._readyNotified = [];
+    var ids = getReadyBuildIds();
+    var news = [];
+    for (var i = 0; i < ids.length; i++) {
+      if (S._readyNotified.indexOf(ids[i]) < 0) {
+        S._readyNotified.push(ids[i]);
+        news.push(ids[i]);
+      }
+    }
+    S._readyNotified = S._readyNotified.filter(function (id) {
+      return S.stages.indexOf(id) < 0;
+    });
+    if (!news.length || Game.tab === 'camp' || Game.scene !== 'game') return;
+    var names = [];
+    for (var j = 0; j < news.length; j++) {
+      for (var t = 0; t < D.TECH_TREES.length; t++) {
+        for (var n = 0; n < D.TECH_TREES[t].nodes.length; n++) {
+          if (D.TECH_TREES[t].nodes[n].id === news[j]) names.push(D.TECH_TREES[t].nodes[n].name);
+        }
+      }
+    }
+    if (names.length) {
+      Game.FX.toast('\uD83D\uDD14 可以建造：' + names.slice(0, 2).join('\u3001') + (names.length > 2 ? '\u2026' : ''));
+    }
   }
   function getGoalHint() {
     var best = null;
@@ -495,12 +718,23 @@
         var tip = can
           ? ('可建造：' + st.name + '（打开「建造」）')
           : ('下一目标：' + st.name + '，还差 ' + short.slice(0, 3).join('\u3001'));
+        if (!can && short.length) {
+          var hintZone = '';
+          for (var id2 in st.need) {
+            if (countItem(+id2) >= st.need[id2]) continue;
+            var chain = D.ITEMS[+id2] && D.ITEMS[+id2].chain;
+            if (chain === 'wood') { hintZone = '岸边'; break; }
+            if (chain === 'food') { hintZone = '林中'; break; }
+            if (chain === 'stone') { hintZone = '礁石'; break; }
+          }
+          if (hintZone) tip += ' · 建议去' + hintZone;
+        }
         if (can) return tip;
         if (!best) best = tip;
         break;
       }
     }
-    return best || '点采集收资源，3 个同类自动合成升级';
+    return best || '先选采集地点：岸边浮木、林中食物、礁石石料';
   }
   function getGatherLevel() {
     var level = 1;
@@ -510,22 +744,63 @@
     else if (S.stages.indexOf(111) >= 0) level = 2;
     return level;
   }
-  // V1.5: 根据工具等级和天气计算物品等级概率
-  function getRandomItemByLevel() {
+  // V1.18: 采集区域轻技巧（岸边/林中/礁石）—— 掉落偏置 + 空手差异，合成仍自动
+  var GATHER_ZONES = {
+    shore: {
+      id: 'shore', name: '岸边', em: '\uD83C\uDFD6',
+      blurb: '浮木多，空手较低',
+      // wood / food / stone
+      chainW: [0.58, 0.20, 0.22],
+      missMul: 0.82,
+      qualityBoost: 0
+    },
+    forest: {
+      id: 'forest', name: '林中', em: '\uD83C\uDF33',
+      blurb: '椰子/食物多，较均衡',
+      chainW: [0.22, 0.56, 0.22],
+      missMul: 1.0,
+      qualityBoost: 0
+    },
+    reef: {
+      id: 'reef', name: '礁石', em: '\uD83E\uDEA8',
+      blurb: '石料多，空手略高但易出好货',
+      chainW: [0.20, 0.18, 0.62],
+      missMul: 1.28,
+      qualityBoost: 0.06
+    }
+  };
+
+  function getZone(zoneId) {
+    return GATHER_ZONES[zoneId] || GATHER_ZONES.shore;
+  }
+
+  function pickChainItem(level, zoneId) {
+    // level: 1/2/3 → 各链对应物品
+    var z = getZone(zoneId);
+    var w = z.chainW;
+    var r = Math.random();
+    var chain = (r < w[0]) ? 'wood' : (r < w[0] + w[1] ? 'food' : 'stone');
+    var table = {
+      wood: [1, 2, 3],
+      food: [11, 12, 13],
+      stone: [21, 22, 23]
+    };
+    var lv = Math.max(1, Math.min(3, level | 0));
+    return table[chain][lv - 1];
+  }
+
+  // V1.5/V1.18: 根据工具等级、天气、区域计算物品
+  function getRandomItemByLevel(zoneId) {
     var wInfo = getWeatherInfo();
     var level = getGatherLevel();
-    // 基础概率：Lv1=70% Lv1, 25% Lv2, 5% Lv3
-    // Lv2: 40% Lv1, 45% Lv2, 15% Lv3
-    // Lv3: 20% Lv1, 50% Lv2, 30% Lv3
-    // Lv4: 10% Lv1, 40% Lv2, 50% Lv3
+    var z = getZone(zoneId);
     var probs = {
       1: [0.70, 0.25, 0.05],
       2: [0.40, 0.45, 0.15],
       3: [0.20, 0.50, 0.30],
       4: [0.10, 0.40, 0.50]
     };
-    var p = probs[level] || probs[1];
-    // 天气加成：晴天额外 +5% 高品质
+    var p = (probs[level] || probs[1]).slice();
     if (wInfo && wInfo.gatherBoost > 1) {
       p[2] = Math.min(0.5, p[2] + 0.05);
       p[0] = Math.max(0.1, p[0] - 0.05);
@@ -534,34 +809,53 @@
       p[2] = Math.min(0.55, p[2] + 0.05);
       p[0] = Math.max(0.08, p[0] - 0.05);
     }
-    var r = Math.random();
-    // V1.5: 额外概率获得概率食物（椰子等）：挖到直接恢复体力，概率稍低
-    if (r < 0.1) {
-      return { type: 'food', id: 11 }; // 椰子
+    if (z.qualityBoost) {
+      p[2] = Math.min(0.58, p[2] + z.qualityBoost);
+      p[0] = Math.max(0.06, p[0] - z.qualityBoost);
     }
-    r = (r - 0.1) / 0.9; // 重新映射剩余概率（成功路径内）
-    if (r < p[0]) return { type: 'item', id: D.L1[Math.floor(Math.random() * 3)] }; // L1
-    else if (r < p[0] + p[1]) return { type: 'item', id: D.L2_BONUS[Math.floor(Math.random() * 3)] }; // L2
-    // V1.10机制修复: L3 档原固定返回木架(3)，导致「高品质」永远只有木头，食物/石链 L3 只能靠合成
-    else return { type: 'item', id: [3, 13, 23][Math.floor(Math.random() * 3)] }; // L3 三链随机
+    var r = Math.random();
+    // 林中更容易直接挖到椰子回体；岸边/礁石略低
+    var foodChance = (z.id === 'forest') ? 0.14 : (z.id === 'shore' ? 0.08 : 0.06);
+    if (r < foodChance) {
+      return { type: 'food', id: 11, zone: z.id };
+    }
+    r = (r - foodChance) / (1 - foodChance);
+    var itemLv = 1;
+    if (r < p[0]) itemLv = 1;
+    else if (r < p[0] + p[1]) itemLv = 2;
+    else itemLv = 3;
+    return { type: 'item', id: pickChainItem(itemLv, z.id), zone: z.id };
   }
-  // V1.5: 计算本次采集空手率（受天气 / 版本影响）
-  function computeMissRate() {
+
+  // V1.5/V1.18: 空手率（天气 / 科技 / 区域）
+  function computeMissRate(zoneId) {
     var wInfo = getWeatherInfo();
+    var z = getZone(zoneId);
     var rate = D.MISS_RATE;
-    if (wInfo.gatherBoost > 1) rate = D.MISS_RATE / wInfo.gatherBoost; // 晴天降低空手率
-    if (S.gatherBonus) rate *= 0.8; // V1.6: 陷阱解锁后空手率再降 20%
-    // V1.12: 巨杉独木舟的教训（原著第6年造大船拖不下海）→ 之后采集少走弯路
+    if (wInfo.gatherBoost > 1) rate = D.MISS_RATE / wInfo.gatherBoost;
+    if (S.gatherBonus) rate *= 0.8;
     if (S.canoeLesson) rate *= 0.85;
     var expLv = getExploreLevel();
     if (expLv > 0) rate *= Math.pow(0.92, expLv);
-    return Math.max(0.05, rate);
+    // V1.19: 脚印后的不安 / 星期五同伴
+    if (S.footprintSeen && !S.friday) rate *= 1.08;
+    if (S.friday) rate *= 0.9;
+    if (S.fridayBond) rate *= 0.95;
+    // 区域倍率
+    rate *= z.missMul;
+    // 雨天：林中更湿滑；岸边相对稳；礁石浪大
+    if (wInfo && wInfo.type === 1) {
+      if (z.id === 'forest') rate *= 1.15;
+      if (z.id === 'reef') rate *= 1.1;
+      if (z.id === 'shore') rate *= 0.95;
+    }
+    // 晴天：岸边更划算
+    if (wInfo && wInfo.type === 0 && z.id === 'shore') rate *= 0.9;
+    return Math.max(0.04, Math.min(0.35, rate));
   }
+
   // V1.5: 采集成功后的落地（含椰子等概率食物恢复体力）
-  function processGatherResult(pos) {
-    // V1.11机制修复: 采集动画 2.4s 期间棋盘仍可被改动（例如烹饪会用 firstEmpty 放产物），
-    //   原实现直接写回 S.board[pos]，会把动画期间落到该格的物品安静覆盖掉 —— 材料白费且玩家无从察觉。
-    //   现先校验原位置是否已被占用，被占则另寻空位。
+  function processGatherResult(pos, zoneId) {
     if (S.board[pos]) {
       var alt = firstEmpty();
       if (alt < 0) { Game.FX.toast('棋盘满了，这次收获没地方放'); return; }
@@ -570,37 +864,78 @@
     var cellRect = getCellRect(pos);
     var cx = cellRect.x + cellRect.w / 2;
     var cy = cellRect.y - 8;
-    var result = getRandomItemByLevel();
+    var result = getRandomItemByLevel(zoneId);
+    var z = getZone(zoneId);
     if (result.type === 'food') {
-      // 椰子等概率食物：挖到直接恢复 1-2 点体力（概率较低）
       var gain = Math.floor(Math.random() * 2) + 1;
-      // V1.15: 与 tryTickEnergy 一致，饥饿时不得突破 effectiveMaxEnergy
       S.energy = Math.min(effectiveMaxEnergy(), S.energy + gain);
-      S.board[pos] = result.id; // 同时作为食物留在棋盘
+      S.board[pos] = result.id;
       Game.FX.floaty('\uD83E\uDD65 +' + gain + '体力', cx, cy);
-      Game.FX.toast('发现椰果！体力 +' + gain);
+      Game.FX.toast(z.em + ' ' + z.name + '发现椰果！体力 +' + gain);
     } else {
       S.board[pos] = result.id;
       var toolLevel = getGatherLevel();
       var wInfo = getWeatherInfo();
       var bonus = (wInfo.gatherBoost > 1 || toolLevel > 1) ? (' Lv' + toolLevel) : '';
-      Game.FX.floaty('\uD83C\uDFA3' + D.ITEMS[result.id].em + bonus, cx, cy);
+      Game.FX.floaty(z.em + D.ITEMS[result.id].em + bonus, cx, cy);
     }
-    // 采集物入格小弹跳
     if (!mergeAnim[pos]) mergeAnim[pos] = 0.35;
     setTimeout(function () { autoMerge(); }, 120);
     save();
   }
+
+  // V1.18b: 采集地点常驻 —— 默认岸边；点采集直接采；菜单改地点后一直生效
+  function getGatherZoneId() {
+    var z = S.gatherZone || 'shore';
+    if (!GATHER_ZONES[z]) z = 'shore';
+    return z;
+  }
   function gather() {
-    // V1.5: 动画进行中禁止重复触发，避免能量被多次扣除
+    digGather(getGatherZoneId());
+  }
+  function openGatherZoneMenu() {
+    if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return;
+    if (Game.modal) return;
+    var cur = getGatherZoneId();
+    var wInfo = getWeatherInfo();
+    var weatherLine = (wInfo.em || '') + ' 今日' + (wInfo.name || '天气') +
+      (wInfo.type === 0 ? '：岸边更稳' : (wInfo.type === 1 ? '：林中较滑，岸边相对好走' : ''));
+    function pick(zid) {
+      return function () {
+        closeModal();
+        S.gatherZone = zid;
+        save();
+        var z = getZone(zid);
+        Game.FX.toast('采集地点：' + z.em + ' ' + z.name + '（之后都去这里）');
+      };
+    }
+    openModal({
+      title: '\uD83D\uDCCD 切换采集地点',
+      body: weatherLine + '\n\n当前：' + getZone(cur).em + ' ' + getZone(cur).name + '\n\n' +
+        '\uD83C\uDFD6 岸边 — 浮木多，空手较低\n' +
+        '\uD83C\uDF33 林中 — 食物多，较均衡\n' +
+        '\uD83E\uDEA8 礁石 — 石料多，风险换好货\n\n' +
+        '改完后点「采集」会一直用该地点，无需每次重选。',
+      buttons: [
+        { label: '\uD83C\uDFD6 岸边', primary: cur === 'shore', cb: pick('shore') },
+        { label: '\uD83C\uDF33 林中', primary: cur === 'forest', cb: pick('forest') },
+        { label: '\uD83E\uDEA8 礁石', primary: cur === 'reef', cb: pick('reef') }
+      ]
+    });
+  }
+
+  function digGather(zoneId) {
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return;
     if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return;
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
-    if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; } // V1.15: 前期无广告，去掉误导文案
+    if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; }
     var pos = firstEmpty();
-    if (pos < 0) { emptyLine('full'); return; } // 棋盘满
-    // 扣体力（晴天惊喜可免）
+    if (pos < 0) { emptyLine('full'); return; }
+
+    var z = getZone(zoneId);
+    S.gatherZone = z.id;
+
     var energyCost = S._sunnyGift ? 0 : 1;
     S._sunnyGift = false;
     S.energy -= energyCost;
@@ -611,17 +946,16 @@
       }, 2600);
     }
     save();
-    // 预判定空手率，但动画期间不揭晓，结束后再给反馈（更有「挖掘」代入感）
-    var isMiss = Math.random() < computeMissRate();
-    // V1.5: 触发采集动画（1.5s 挖掘过程），结束后落地结果
+
+    var isMiss = Math.random() < computeMissRate(z.id);
     Game.FX.gatherAnim(function () {
       if (isMiss) {
-        // 空手：体力照扣 + 趣味文案 + 💢 提示
         emptyLine('miss');
         var gb = getGatherBtnRect();
         Game.FX.floaty('\uD83D\uDCA2', gb.x + gb.w / 2, gb.y - 10);
       } else {
-        processGatherResult(pos);
+        processGatherResult(pos, z.id);
+        if (z.id === 'shore') maybeShoreFlotsam();
       }
       save();
     });
@@ -653,6 +987,7 @@
     }
     if (merged) { autoMerge(); return; } // 连锁
     save();
+    notifyIfNewReady();
   }
 
   // ============ 建造（V1.3 科技树 + V1.4 分支封锁 + 天数过渡 + 营地升级光晕 + 结局） ============
@@ -677,6 +1012,31 @@
     if (S.lockedTrees && stTree && S.lockedTrees.indexOf(stTree.id) >= 0) {
       Game.FX.toast('\uD83D\uDD12 ' + stTree.name + '\u5206\u652F\u5DF2\u5C01\u9501\uFF0C\u65E0\u6CD5\u5EFA\u9020'); // V1.11: 修「分已封销」错字（应为「分支已封锁」）
       return;
+    }
+    // V1.18: 同时最多主攻 2 条未完成科技树（已建成节点保留；完成一条可再开新线）
+    if (stTree) {
+      var treeHasAny = false, treeComplete = true;
+      for (var ni = 0; ni < stTree.nodes.length; ni++) {
+        var nid = stTree.nodes[ni].id;
+        if (S.stages.indexOf(nid) >= 0) treeHasAny = true;
+        else treeComplete = false;
+      }
+      if (!treeHasAny) {
+        var active = 0;
+        for (var ti = 0; ti < D.TECH_TREES.length; ti++) {
+          var tr = D.TECH_TREES[ti];
+          if (S.lockedTrees && S.lockedTrees.indexOf(tr.id) >= 0) continue;
+          var built = 0;
+          for (var nj = 0; nj < tr.nodes.length; nj++) {
+            if (S.stages.indexOf(tr.nodes[nj].id) >= 0) built++;
+          }
+          if (built > 0 && built < tr.nodes.length) active++;
+        }
+        if (active >= 2) {
+          Game.FX.toast('同时最多主攻 2 条科技\n先把其中一条推完，再开新线');
+          return;
+        }
+      }
     }
     // V1.3: 检查前置节点是否已建造
     if (st.prev && S.stages.indexOf(st.prev) < 0) {
@@ -935,6 +1295,13 @@
     if (pos < 0) { Game.FX.toast('棋盘满了，先合成或建造腾出空位'); return; } // 满盘不消耗漂流瓶
     S.bottle--;
     var r = Math.random();
+    // V1.19: 30% 走涨潮漂流物表（更有原著「海送东西来」感）
+    if (r < 0.3) {
+      var fe = pickFlotsam();
+      grantFlotsam(fe);
+      return;
+    }
+    r = (r - 0.3) / 0.7;
     if (r < 0.5) {
       var id = D.L1[Math.floor(Math.random() * 3)];
       S.board[pos] = id;
@@ -1324,7 +1691,10 @@
   // ============ 布局辅助（供飘字/动效定位） ============
   function getGatherBtnRect() {
     var ay = H - 112;
-    return { x: 10, y: ay, w: (W - 20) * 0.58, h: 42 };
+    var zoneW = 76, gapA = 6;
+    var restW = W - 20 - zoneW - gapA;
+    var gatherW = restW * 0.58;
+    return { x: 10 + zoneW + gapA, y: ay, w: gatherW, h: 42 };
   }
   function getCellRect(ci) {
     var py = 148, ph = H - 148 - 118;
@@ -1435,6 +1805,9 @@
   App.onStart = onStart;
   App.backHome = backHome;
   App.gather = gather;
+  App.openGatherZoneMenu = openGatherZoneMenu;
+  App.getGatherZoneId = getGatherZoneId;
+  App.getGatherZone = function () { return getZone(getGatherZoneId()); };
   App.bottle = bottle;
   App.buildStage = buildStage;
   App.switchTab = switchTab;
@@ -1444,6 +1817,8 @@
   App.energyTimerText = energyTimerText;
   App.campTagText = campTagText;
   App.getGoalHint = getGoalHint;
+  App.hasReadyBuild = hasReadyBuild;
+  App.getReadyBuildIds = getReadyBuildIds;
   App.getDefenseLevel = getDefenseLevel;
   App.getExploreLevel = getExploreLevel;
   App.offlineUnclaimed = function () { return S.offlineUnclaimed; };

@@ -175,17 +175,34 @@
       ctx.font = '13px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      var tLines = String(t.text).split('\n');
+      // V1.17: toast 长行自动折行，避免超宽挤出屏幕
+      var maxToastW = W - 40;
+      var rawLines = String(t.text).split('\n');
+      var tLines = [];
+      for (var tr = 0; tr < rawLines.length; tr++) {
+        var raw = rawLines[tr];
+        if (!raw) { tLines.push(''); continue; }
+        var cur = '';
+        for (var ti = 0; ti < raw.length; ti++) {
+          var ch = raw.charAt(ti);
+          if (ctx.measureText(cur + ch).width > maxToastW && cur) {
+            tLines.push(cur);
+            cur = ch;
+          } else cur = cur + ch;
+        }
+        if (cur) tLines.push(cur);
+      }
       var tMaxW = 0;
       for (var tl = 0; tl < tLines.length; tl++) {
         var lw = ctx.measureText(tLines[tl]).width;
         if (lw > tMaxW) tMaxW = lw;
       }
-      var tw = Math.min(W - 24, tMaxW + 32);
+      var tw = Math.min(W - 24, Math.max(120, tMaxW + 32));
       var tLh = 18;
       var tBoxH = tLines.length * tLh + 14;
-      var ty = H * 0.25 - tBoxH / 2;
-      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      var ty = H * 0.22 - tBoxH / 2;
+      if (ty < 12) ty = 12;
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
       roundRect(ctx, (W - tw) / 2, ty, tw, tBoxH, Math.min(16, tBoxH / 2));
       ctx.fill();
       ctx.fillStyle = '#FFFFFF';
@@ -273,12 +290,29 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('\u26CF\uFE0F', W / 2, cy - 16 + bob);
-      // 采集中... 提示（全程显示，结尾淡出），与锄头垂直贴近
+      // V1.17: 「采集中」深色底 + 描边，沙滩背景下更易读
       var tipA = prog > 0.82 ? (1 - (prog - 0.82) / 0.18) : 1;
       ctx.globalAlpha = tipA;
-      ctx.font = 'bold 17px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.fillText('\u91C6\u96C6\u4E2D...', W / 2, cy + 22);
+      var tip = '\u91C6\u96C6\u4E2D...';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var tipW = ctx.measureText(tip).width + 28;
+      var tipH = 32;
+      var tipX = (W - tipW) / 2;
+      var tipY = cy + 10;
+      ctx.fillStyle = 'rgba(20, 30, 40, 0.78)';
+      roundRect(ctx, tipX, tipY, tipW, tipH, 16);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 225, 160, 0.55)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, tipX, tipY, tipW, tipH, 16);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(tip, W / 2, tipY + tipH / 2);
+      ctx.fillStyle = '#FFF8E7';
+      ctx.fillText(tip, W / 2, tipY + tipH / 2);
       ctx.globalAlpha = 1;
     }
 

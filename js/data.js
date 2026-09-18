@@ -210,9 +210,10 @@
     {
       id: 'beast',
       title: '\uD83D\uDC3B 野兽袭击！',
-      body: '一只野兽闯入营地，你会怎么做？',
+      body: '一只野兽闯入营地。稳守更安全但要耗资源；冒险可能多捞物资，也可能损失更大。',
       options: [
-        { label: '战斗', primary: true, cb: 'beast_fight' },
+        { label: '稳守', primary: true, cb: 'beast_safe' },
+        { label: '冒险', primary: false, cb: 'beast_risk' },
         { label: '逃跑', primary: false, cb: 'beast_flee' }
       ]
     },
@@ -310,7 +311,7 @@
       dayMin: 9, once: true,
       // 原著：约第17年发现脚印，随后找到人骨与生火痕迹
       title: '\uD83D\uDC63 沙滩上的脚印',
-      body: '退潮后的湿沙上，清清楚楚一个脚印——不是你的。你左右张望，只有浪声。',
+      body: '退潮后的湿沙上，清清楚楚一个脚印——\n不是你的。\n你左右张望，只有浪声。',
       options: [
         { label: '追查脚印', primary: true, cb: 'lore_footprint' },
         { label: '当作没看见', primary: false, cb: 'lore_footprint_skip' }
@@ -371,7 +372,39 @@
         { label: '蹲下来，陪它到天黑', primary: true, cb: 'lore_dog_stay' },
         { label: '别看了，去干活', primary: false, cb: 'lore_dog_leave' }
       ]
-    }
+    },
+    {
+      id: 'smoke',
+      dayMin: 10, once: true, requireFlag: 'footprintSeen',
+      // 原著：脚印后发现生火痕迹 / 远处炊烟，他者逼近
+      title: '\uD83D\uDD25 林子后的炊烟',
+      body: '脚印出现后第几天，你在东岸林梢看见一缕细烟。\n有人在岛的另一头生火。',
+      options: [
+        { label: '摸过去看看', primary: true, cb: 'lore_smoke_go' },
+        { label: '先躲起来观察', primary: false, cb: 'lore_smoke_hide' }
+      ]
+    },
+    {
+      id: 'friday',
+      dayMin: 12, once: true, requireFlag: 'footprintSeen',
+      // 原著：他救出将要被献祭的野人，因其在星期五获救，取名 Friday
+      title: '\uD83D\uDC64 沙滩上的追逐',
+      body: '退潮的沙滩上，几个人影追着另一个跑。\n被追的那个朝你的方向跌跌撞撞——\n你手里有火把，也有退路。',
+      options: [
+        { label: '冲出去救人', primary: true, cb: 'lore_friday_save' },
+        { label: '藏好，只看着', primary: false, cb: 'lore_friday_watch' }
+      ]
+    },
+    {
+      id: 'friday_bond',
+      dayMin: 14, once: true, requireFlag: 'friday',
+      title: '\uD83E\uDD1D 他学会说「是」',
+      body: '你教给他的第一个词是「Yes」。\n他跟着你拾柴、守夜，不再像客人，像同伴。',
+      options: [
+        { label: '一起去岸边干活', primary: true, cb: 'lore_friday_work' },
+        { label: '让他先休息', primary: false, cb: 'lore_friday_rest' }
+      ]
+    },
   ];
 
   // V1.13 原著彩蛋：墨水会用完
@@ -382,6 +415,21 @@
     { min: 0,  text: '桌上还有小半瓶墨水，够我写一阵子。' },
     { min: 8,  text: '墨水见了底。我往里兑了水，写出来的字自己都认不清。' },
     { min: 16, text: '墨水用完了，再也造不出来。往后只能刻在木头上——大事才刻。' }
+  ];
+
+
+  // V1.19: 涨潮漂流物表（原著式「海送什么来什么」——叙事 + 轻随机收益）
+  var FLOTSAM = [
+    { id: 'crate', w: 22, title: '破木箱', kind: 'items', ids: [1, 1, 2], text: '浪把一只破木箱推上岸，里面还有干得发白的木板。' },
+    { id: 'cask', w: 16, title: '空酒桶', kind: 'items', ids: [1, 21], text: '一只空酒桶撞在礁石上，箍散了，倒出两样能用的边角料。' },
+    { id: 'seed', w: 12, title: '潮湿的谷种', kind: 'items', ids: [11, 11], text: '布袋泡胀了，里面几把谷种居然还没全坏。' },
+    { id: 'rope', w: 10, title: '一卷湿绳子', kind: 'items', ids: [1, 1, 1], text: '一卷被泡涨的麻绳，晾干后还能用。' },
+    { id: 'tool', w: 8, title: '锈蚀小刀', kind: 'items', ids: [22], text: '砂里埋着一把锈刀，磨一磨勉强能当石斧使。' },
+    { id: 'powder', w: 7, title: '受潮火药', kind: 'energy', amount: 1, text: '一小罐火药受了潮，打不着火——你只好泄气地坐着喘口气，反而缓过来了。体力 +1' },
+    { id: 'bible', w: 6, title: '浸湿的书页', kind: 'story', text: '几页浸得字迹发糊的纸。你读不太清，却忽然不那么怕夜里的风声。' },
+    { id: 'cloth', w: 8, title: '一卷帆布', kind: 'items', ids: [2, 2], text: '一卷还能用的帆布边角，够补棚顶。' },
+    { id: 'bottle2', w: 6, title: '密封小瓶', kind: 'items', ids: [12], text: '一只塞紧的小瓶，里面竟是晒干的椰肉片。' },
+    { id: 'junk', w: 5, title: '无名碎木', kind: 'miss', text: '一堆碎木冲上来，拎起来全是空心的——白忙一场。' }
   ];
 
   // V1.13 原著彩蛋：他自嘲「既是个蹩脚的木工，也是个蹩脚的裁缝」
@@ -407,6 +455,8 @@
     CASTAWAY_DATE: CASTAWAY_DATE, NOTCH_RULE: NOTCH_RULE, ISLAND_NAME: ISLAND_NAME,
     SEASONS: SEASONS, SEASON_DAYS: SEASON_DAYS, LORE_EVENTS: LORE_EVENTS,
     // V1.13 原著细节扩容
-    INK_STAGES: INK_STAGES, SORRY_LINES: SORRY_LINES
+    INK_STAGES: INK_STAGES, SORRY_LINES: SORRY_LINES,
+    // V1.19
+    FLOTSAM: FLOTSAM
   };
 })();

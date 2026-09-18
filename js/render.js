@@ -112,25 +112,257 @@
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
 
+    // V1.17c: B木筏主视觉 + C错位海报字
+    function strokeFillChar(ctx, ch, fontSize, glowCol) {
+      ctx.font = 'bold ' + fontSize + 'px "PingFang SC","Heiti SC","Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = glowCol || 'rgba(232,118,58,0.5)';
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = Math.max(7, fontSize * 0.22);
+      ctx.strokeStyle = '#1A100A';
+      ctx.strokeText(ch, 0, 0);
+      ctx.lineWidth = Math.max(3, fontSize * 0.1);
+      ctx.strokeStyle = '#6B4226';
+      ctx.strokeText(ch, 0, 0);
+      var grad = ctx.createLinearGradient(0, -fontSize * 0.55, 0, fontSize * 0.55);
+      grad.addColorStop(0, '#FFF8E1');
+      grad.addColorStop(0.38, '#F6D48A');
+      grad.addColorStop(1, '#E0672A');
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = grad;
+      ctx.fillText(ch, 0, 0);
+      ctx.fillStyle = 'rgba(255,255,255,0.38)';
+      ctx.fillText(ch, -0.8, -1.2);
+    }
+
+    function drawPosterTitle(ctx, cx, cy, t, fade) {
+      // 上行斜插卖点（C）
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(cx - 88, cy - 38);
+      ctx.rotate(-0.22);
+      ctx.font = 'bold 13px "PingFang SC","Heiti SC",sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(12,28,40,0.55)';
+      roundRect(ctx, -8, -11, 86, 22, 6);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,230,170,0.8)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, -8, -11, 86, 22, 6);
+      ctx.stroke();
+      ctx.fillStyle = '#FFF6D8';
+      ctx.fillText('合成放置', 2, 1);
+      ctx.restore();
+
+      // 下行超大错位主标题：字号不等 + 轻微透视感
+      var chars = ['绝', '望', '岛', '求', '生', '记'];
+      var sizes = [40, 42, 52, 46, 56, 44]; // 「岛」「生」更大
+      var yOff = [-4, 2, -8, 4, -10, 1];
+      var rots = [-0.1, -0.04, 0.06, -0.05, 0.08, -0.02];
+      var gaps = [38, 40, 44, 42, 46, 40];
+      var total = 0;
+      for (var g = 0; g < gaps.length; g++) total += gaps[g];
+      var x = cx - total / 2 + gaps[0] / 2;
+      for (var i = 0; i < chars.length; i++) {
+        var bob = Math.sin(t * 2.1 + i * 0.55) * 1.6;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.translate(x, cy + yOff[i] + bob);
+        ctx.rotate(rots[i] + Math.sin(t * 1.4 + i) * 0.015);
+        // 「生」下方小强调点
+        if (i === 4) {
+          ctx.fillStyle = 'rgba(232,118,58,0.55)';
+          ctx.save();
+          ctx.translate(0, sizes[i] * 0.42);
+          ctx.scale(1, 0.35);
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        strokeFillChar(ctx, chars[i], sizes[i], 'rgba(232,118,58,0.55)');
+        ctx.restore();
+        if (i < chars.length - 1) x += (gaps[i] + gaps[i + 1]) / 2;
+      }
+
+      // 撕纸贴纸角标：贴在字角外缘，不压笔画
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(cx - total / 2 - 8, cy - 28);
+      ctx.rotate(-0.28);
+      ctx.fillStyle = '#E53935';
+      roundRect(ctx, -22, -9, 44, 18, 3);
+      ctx.fill();
+      // 撕边小三角
+      ctx.beginPath();
+      ctx.moveTo(-22, 9); ctx.lineTo(-16, 15); ctx.lineTo(-10, 9);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('热门', 0, 1);
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(cx + total / 2 + 6, cy + 18);
+      ctx.rotate(0.2);
+      ctx.fillStyle = '#F4A261';
+      roundRect(ctx, -28, -9, 56, 18, 3);
+      ctx.fill();
+      ctx.fillStyle = '#3A2A20';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('免费玩', 0, 1);
+      ctx.restore();
+    }
+
+    function drawHeroRaft(ctx, cx, cy, t, fade, scale) {
+      var s = scale || 1.85;
+      var tilt = Math.sin(t * 1.55 + 0.3) * 0.07;
+      var bob = Math.sin(t * 1.55) * 4;
+
+      // 水圈涟漪
+      ctx.save();
+      ctx.globalAlpha = fade * 0.25;
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 2;
+      for (var ri = 0; ri < 2; ri++) {
+        var rr = 55 * s + ri * 18 + (t * 20 % 18);
+        ctx.save();
+        ctx.translate(cx, cy + 28 * s + bob * 0.3);
+        ctx.scale(1, 0.28);
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // 倒影
+      ctx.save();
+      ctx.globalAlpha = fade * 0.16;
+      ctx.translate(cx, cy + 30 * s + bob);
+      ctx.scale(s, -0.4 * s);
+      ctx.rotate(-tilt * 0.5);
+      ctx.fillStyle = '#6E4428';
+      ctx.beginPath();
+      ctx.moveTo(-36, 0); ctx.lineTo(36, 0); ctx.lineTo(24, 18); ctx.lineTo(-24, 18);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(cx, cy + bob);
+      ctx.rotate(tilt);
+      ctx.scale(s, s);
+
+      // 船体阴影
+      ctx.fillStyle = 'rgba(74,52,40,0.28)';
+      ctx.beginPath();
+      ctx.moveTo(-34, 5); ctx.lineTo(34, 5); ctx.lineTo(22, 20); ctx.lineTo(-22, 20);
+      ctx.closePath(); ctx.fill();
+
+      // 船体
+      var hull = ctx.createLinearGradient(0, 0, 0, 20);
+      hull.addColorStop(0, '#C48952');
+      hull.addColorStop(1, '#6E4428');
+      ctx.fillStyle = hull;
+      ctx.beginPath();
+      ctx.moveTo(-36, 0); ctx.lineTo(36, 0); ctx.lineTo(23, 18); ctx.lineTo(-23, 18);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#4A3428'; ctx.lineWidth = 1.6; ctx.stroke();
+
+      // 甲板木纹
+      ctx.strokeStyle = 'rgba(250,241,221,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-28, 4); ctx.lineTo(28, 4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-24, 9); ctx.lineTo(24, 9); ctx.stroke();
+
+      // 船舱
+      ctx.fillStyle = '#8B5E3C';
+      roundRect(ctx, -12, -12, 18, 12, 2); ctx.fill();
+      ctx.fillStyle = '#F2D5A0';
+      roundRect(ctx, -8, -9, 6, 5, 1); ctx.fill();
+
+      // 桅杆 + 横桁
+      ctx.strokeStyle = '#3A2A20'; ctx.lineWidth = 2.8;
+      ctx.beginPath(); ctx.moveTo(2, -2); ctx.lineTo(2, -48); ctx.stroke();
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(2, -44); ctx.lineTo(30, -26); ctx.stroke();
+
+      // 主帆
+      ctx.fillStyle = '#FAF1DD';
+      ctx.beginPath();
+      ctx.moveTo(3, -46);
+      ctx.quadraticCurveTo(34, -28, 3, -10);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#E8D6B0'; ctx.lineWidth = 1; ctx.stroke();
+      // 帆上缝线
+      ctx.strokeStyle = 'rgba(110,68,40,0.25)';
+      ctx.beginPath(); ctx.moveTo(8, -40); ctx.quadraticCurveTo(24, -28, 8, -16); ctx.stroke();
+
+      // 旗（飘动）
+      var flagWave = Math.sin(t * 6.2) * 3.5;
+      ctx.fillStyle = '#E8763A';
+      ctx.beginPath();
+      ctx.moveTo(2, -48); ctx.lineTo(16 + flagWave, -44); ctx.lineTo(2, -40);
+      ctx.closePath(); ctx.fill();
+
+      // 船头浪花
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      for (var fi = 0; fi < 5; fi++) {
+        var fx = 26 + fi * 4, fy = 10 + Math.sin(t * 5.2 + fi) * 2.2;
+        ctx.beginPath(); ctx.arc(fx, fy, 2.4 - fi * 0.28, 0, Math.PI * 2); ctx.fill();
+      }
+      // 船尾小浪
+      for (var bi = 0; bi < 3; bi++) {
+        ctx.beginPath();
+        ctx.arc(-28 - bi * 4, 12 + Math.sin(t * 4 + bi) * 1.5, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 甲板上的小人剪影（增加「有人在漂」的代入）
+      ctx.fillStyle = '#3A2A20';
+      ctx.beginPath(); ctx.arc(-6, -16, 3.2, 0, Math.PI * 2); ctx.fill(); // 头
+      ctx.fillRect(-8.5, -13, 5, 8); // 身
+
+      ctx.restore();
+
+      // 金粉粒子绕船（轻）
+      ctx.save();
+      for (var pi = 0; pi < 6; pi++) {
+        var ang = t * 0.9 + pi * 1.05;
+        var pr = 70 + Math.sin(t * 2 + pi) * 8;
+        var px = cx + Math.cos(ang) * pr * 0.9;
+        var py = cy - 20 + Math.sin(ang * 1.3) * 22;
+        ctx.globalAlpha = fade * (0.25 + 0.35 * Math.sin(t * 3 + pi));
+        ctx.fillStyle = '#FFE8A3';
+        ctx.beginPath(); ctx.arc(px, py, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // —— 首页构图：上标题 / 中岛景留空 / 下木筏+按钮 ——
+    drawPosterTitle(ctx, W / 2, H * 0.24, t, fade);
+    // 木筏落到岛屿下方海面，露出小屋与棕榈；按钮整组下压
+    drawHeroRaft(ctx, W / 2, H * 0.70, t, fade, 1.55);
+
     ctx.save();
     ctx.globalAlpha = fade;
-    ctx.translate(W / 2, H * 0.15);
-    ctx.scale(breathe, breathe);
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 34px sans-serif';
+    ctx.font = '12px "PingFang SC","Heiti SC",sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('绝望岛求生记', 0, 0);
-    ctx.shadowBlur = 4;
-    ctx.font = '13px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillText('鲁滨逊的漂流', 0, 30);
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillText('鲁滨逊漂流 · 从一根浮木活下去', W / 2, H * 0.79);
     ctx.restore();
 
     // 开始按钮（呼吸缩放）
-    var bw = 200, bh = 52, bx = (W - bw) / 2, by = H * 0.74;
+    var bw = 200, bh = 52, bx = (W - bw) / 2, by = H * 0.85;
     var pulse = 1 + Math.sin(t * 2.2) * 0.025;
     ctx.save();
     ctx.globalAlpha = Math.min(1, fade + 0.15);
@@ -145,14 +377,12 @@
     hit(bx, by, bw, bh + 6, function () { Game.App.onStart(); });
 
     ctx.save();
-    ctx.globalAlpha = fade * 0.9;
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    ctx.globalAlpha = fade * 0.92;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('从一根浮木，到一座营地', W / 2, H * 0.87);
+    ctx.fillText('采集合成 · 建造营地 · 写下你的荒岛日记', W / 2, H * 0.935);
     ctx.restore();
   }
 
@@ -467,21 +697,20 @@
       ctx.fillText(boardScrollY > 0 ? '\u25B2 上翻' : (totalRows > visibleRows ? '\u25BC 下翻' : ''), W / 2, py + ph - 6);
     }
 
-    // 操作按钮区（采集 + 漂流瓶，对应 .acts）
+    // 操作按钮区：地点菜单 + 采集 + 漂流瓶
     var ay = H - 112;
-    var gatherW = (W - 20) * 0.58, bottleW = (W - 20) * 0.4;
+    var zoneW = 76, gapA = 6;
+    var restW = W - 20 - zoneW - gapA;
+    var gatherW = restW * 0.58, bottleW = restW - gatherW - gapA;
     var gatherActive = S.energy > 0;
-    // V1.2: 显示有效体力上限（饥饿时减半）
-    // V1.11: fInfo 已在顶栏处取得，此处去掉重复的 var 声明（原写法虽不报错，但同函数内重复声明易埋隐患）
     var effectiveMax = fInfo ? fInfo.effectiveMaxEnergy : S.maxEnergy;
+    var zInfo = Game.App.getGatherZone ? Game.App.getGatherZone() : { em: '\uD83C\uDFD6', name: '岸边' };
+    var zLabel = (zInfo.em || '') + (zInfo.name || '岸边');
     var gLabel = '\uD83C\uDFA3 采集 ' + S.energy + '/' + effectiveMax;
-    // V1.5: 采集动画进行中，按钮显示「采集中...」并隐藏倒计时
     var animating = Game.FX.gatherAnimActive && Game.FX.gatherAnimActive();
     if (animating) gLabel = '\uD83C\uDFA3 采集中...';
-    // 体力倒计时（对应 #energyTimer）
     var timerTxt = Game.App.energyTimerText();
     if (timerTxt && !animating) gLabel += ' ' + timerTxt;
-    btn(ctx, 10, ay, gatherW, 42, gLabel, C.fire, '#FFFFFF', gatherActive, pressed === 'gather', 10, 13);
     // V1.15: 目标提示条
     if (Game.App.getGoalHint && Game.tab === 'board') {
       var goal = Game.App.getGoalHint();
@@ -496,9 +725,13 @@
       ctx.fillText(goal.length > 28 ? goal.slice(0, 28) + '\u2026' : goal, 18, ay - 13);
       ctx.restore();
     }
-    hit(10, ay, gatherW, 42, function () { Game.App.gather(); });
-    btn(ctx, 10 + gatherW + 6, ay, bottleW, 42, '\uD83C\uDF7E 漂流瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
-    hit(10 + gatherW + 6, ay, bottleW, 42, function () { Game.App.bottle(); });
+    // 地点常驻按钮（点开切换，不耗体力）
+    btn(ctx, 10, ay, zoneW, 42, zLabel, C.wood, '#FFFFFF', true, pressed === 'zone', 8, 12);
+    hit(10, ay, zoneW, 42, function () { if (Game.App.openGatherZoneMenu) Game.App.openGatherZoneMenu(); });
+    btn(ctx, 10 + zoneW + gapA, ay, gatherW, 42, gLabel, C.fire, '#FFFFFF', gatherActive, pressed === 'gather', 10, 13);
+    hit(10 + zoneW + gapA, ay, gatherW, 42, function () { Game.App.gather(); });
+    btn(ctx, 10 + zoneW + gapA + gatherW + gapA, ay, bottleW, 42, '\uD83C\uDF7E 瓶 ' + S.bottle, '#FFFFFF', C.sea, true, pressed === 'bottle', 10, 12);
+    hit(10 + zoneW + gapA + gatherW + gapA, ay, bottleW, 42, function () { Game.App.bottle(); });
 
     // V1.5: 休息 + 烹饪 + 分享按钮（V1.10: 补上烹饪入口 —— 此前 cookFood 无 UI，饱食度无法恢复）
     var ay2 = H - 64;
@@ -530,10 +763,21 @@
     var ty2 = H - 30;
     var tabW = (W - 20 - 8) / 3;
     var tabs = [['棋盘', 'board'], ['建造', 'camp'], ['日记', 'log']];
+    var ready = Game.App.hasReadyBuild && Game.App.hasReadyBuild();
     for (var ti = 0; ti < 3; ti++) {
       var txx = 10 + ti * (tabW + 4);
       var on = Game.tab === tabs[ti][1];
       btn(ctx, txx, ty2, tabW, 26, tabs[ti][0], on ? C.fire : C.wood, '#FFFFFF', true, false, 8, 11);
+      // V1.17: 可建造时「建造」Tab 红点
+      if (tabs[ti][1] === 'camp' && ready && !on) {
+        ctx.beginPath();
+        ctx.fillStyle = '#E53935';
+        ctx.arc(txx + tabW - 8, ty2 + 6, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
       hit(txx, ty2, tabW, 26, (function (tb) { return function () { Game.App.switchTab(tb); }; })(tabs[ti][1]));
     }
   }
@@ -952,15 +1196,16 @@
     ctx.fillRect(0, 0, W, H);
 
     var mw = Math.min(W - 40, 340);
-    // 标题
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     var titleH = 40;
-    var bodyLines = m.body.split('\n');
-    var bodyH = bodyLines.length * 22 + 12;
-    var btnH = m.buttons.length ? 44 : 0;
-    var mh = 20 + titleH + bodyH + (btnH ? btnH + 12 : 0) + 16;
+    ctx.font = '13px sans-serif';
+    var bodyLines = wrapText(ctx, m.body, mw - 40);
+    var lineH = 20;
+    var bodyH = bodyLines.length * lineH + 16;
+    var btnH = m.buttons && m.buttons.length ? 44 : 0;
+    var mh = Math.min(H * 0.78, 20 + titleH + bodyH + (btnH ? btnH + 12 : 0) + 16);
     var mx = (W - mw) / 2, my = (H - mh) / 2;
 
     ctx.fillStyle = C.paper;
@@ -971,15 +1216,22 @@
     roundRect(ctx, mx, my, mw, mh, 16);
     ctx.stroke();
 
+    ctx.font = 'bold 16px sans-serif';
     ctx.fillStyle = C.wood;
     ctx.fillText(m.title, W / 2, my + 22);
 
+    // 正文区裁剪，防止极端长文溢出按钮
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(mx + 12, my + titleH, mw - 24, mh - titleH - (btnH ? btnH + 20 : 12));
+    ctx.clip();
     ctx.font = '13px sans-serif';
     ctx.fillStyle = C.ink;
     ctx.textAlign = 'center';
     for (var li = 0; li < bodyLines.length; li++) {
-      ctx.fillText(bodyLines[li], W / 2, my + 44 + li * 22);
+      ctx.fillText(bodyLines[li], W / 2, my + 44 + li * lineH);
     }
+    ctx.restore();
 
     // 按钮行
     var by = my + mh - 16 - btnH;
@@ -1017,26 +1269,91 @@
     drawWave(ctx, W, H, horizon + 6, 5, 90, 1.1, 0.0, C.sea, 0.9, t);
     drawWave(ctx, W, H, horizon + 14, 6, 70, 1.4, 1.6, C.seaDark, 0.5, t);
 
-    // 小船（随波起伏 + 随浪倾斜）
+    // V1.17: 精细小船（倒影、船舱、旗、泡沫）+ 远云
+    // 远云
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (var ci = 0; ci < 3; ci++) {
+      var cx = ((t * (8 + ci * 3) + ci * 110) % (W + 80)) - 40;
+      var cy = H * 0.16 + ci * 18;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+      ctx.arc(cx + 14, cy + 2, 16, 0, Math.PI * 2);
+      ctx.arc(cx + 28, cy, 11, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 太阳
+    var sunX = W * 0.78, sunY = H * 0.18;
+    var sunG = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 28);
+    sunG.addColorStop(0, 'rgba(255,220,140,0.9)');
+    sunG.addColorStop(1, 'rgba(255,220,140,0)');
+    ctx.fillStyle = sunG;
+    ctx.beginPath(); ctx.arc(sunX, sunY, 28, 0, Math.PI * 2); ctx.fill();
+
     var bx = W / 2;
     var by = horizon + 4 + Math.sin(t * 1.6) * 5;
-    var tilt = Math.sin(t * 1.6 + 0.4) * 0.05;
+    var tilt = Math.sin(t * 1.6 + 0.4) * 0.06;
+    // 倒影
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.translate(bx, by + 28);
+    ctx.scale(1, -0.45);
+    ctx.rotate(-tilt * 0.5);
+    ctx.fillStyle = C.wood;
+    ctx.beginPath();
+    ctx.moveTo(-32, 0); ctx.lineTo(32, 0); ctx.lineTo(22, 16); ctx.lineTo(-22, 16);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
     ctx.save();
     ctx.translate(bx, by);
     ctx.rotate(tilt);
-    // 船体（木色梯形）
-    ctx.fillStyle = C.wood;
+    // 船体下层阴影
+    ctx.fillStyle = 'rgba(74,52,40,0.25)';
     ctx.beginPath();
-    ctx.moveTo(-28, 0); ctx.lineTo(28, 0); ctx.lineTo(19, 15); ctx.lineTo(-19, 15);
+    ctx.moveTo(-30, 4); ctx.lineTo(30, 4); ctx.lineTo(20, 18); ctx.lineTo(-20, 18);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = C.btnShadow; ctx.lineWidth = 1.5; ctx.stroke();
+    // 船体
+    var hull = ctx.createLinearGradient(0, 0, 0, 18);
+    hull.addColorStop(0, '#A87345');
+    hull.addColorStop(1, '#6E4428');
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(-32, 0); ctx.lineTo(32, 0); ctx.lineTo(21, 16); ctx.lineTo(-21, 16);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#4A3428'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 甲板线
+    ctx.strokeStyle = 'rgba(250,241,221,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-26, 3); ctx.lineTo(26, 3); ctx.stroke();
+    // 小船舱
+    ctx.fillStyle = '#8B5E3C';
+    roundRect(ctx, -10, -10, 16, 10, 2); ctx.fill();
+    ctx.fillStyle = '#F2D5A0';
+    roundRect(ctx, -7, -8, 5, 4, 1); ctx.fill();
     // 桅杆
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, -36); ctx.stroke();
-    // 帆
-    ctx.fillStyle = C.paper;
-    ctx.beginPath(); ctx.moveTo(2, -34); ctx.lineTo(2, -8); ctx.lineTo(22, -20); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = C.paper2; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = '#3A2A20'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(2, -2); ctx.lineTo(2, -42); ctx.stroke();
+    // 横桁
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(2, -38); ctx.lineTo(26, -24); ctx.stroke();
+    // 主帆（弧面感）
+    ctx.fillStyle = '#FAF1DD';
+    ctx.beginPath();
+    ctx.moveTo(3, -40);
+    ctx.quadraticCurveTo(30, -26, 3, -10);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#E8D6B0'; ctx.lineWidth = 1; ctx.stroke();
+    // 旗
+    var flagWave = Math.sin(t * 6) * 3;
+    ctx.fillStyle = '#E8763A';
+    ctx.beginPath();
+    ctx.moveTo(2, -42); ctx.lineTo(14 + flagWave, -39); ctx.lineTo(2, -35);
+    ctx.closePath(); ctx.fill();
+    // 船头浪花
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (var fi = 0; fi < 4; fi++) {
+      var fx = 24 + fi * 3, fy = 8 + Math.sin(t * 5 + fi) * 2;
+      ctx.beginPath(); ctx.arc(fx, fy, 2.2 - fi * 0.3, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
 
     // 近景海浪（遮住船底，营造"船在海浪中"的层次）
