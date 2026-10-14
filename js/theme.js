@@ -68,7 +68,7 @@
     try {
       if (wx.getMenuButtonBoundingClientRect) cap = wx.getMenuButtonBoundingClientRect();
     } catch (e) {}
-    var capsule = cap && cap.width
+    var capsule = cap && cap.width > 0 && cap.bottom > cap.top && cap.top < 200 && cap.left > 120
       ? { left: cap.left * k, top: cap.top * k, bottom: cap.bottom * k, h: cap.height * k }
       : { left: Game.W - 95, top: top + 6, bottom: top + 38, h: 32 };
     var barY = capsule.top + capsule.h / 2; // 顶栏中线与胶囊对齐

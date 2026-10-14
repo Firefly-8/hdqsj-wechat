@@ -59,13 +59,34 @@
 
   E.has = function (e) {
     var A = Game.EmojiAtlas;
-    return !!(E.ready && A && A.map[e.replace(/\ufe0f/g, '')]);
+    return !!(SHAPES[e] || (E.ready && A && A.map[e.replace(/\ufe0f/g, '')]));
   };
 
   /** 以 (cx,cy) 为中心绘制一个贴纸 emoji，size 为 emoji 本体尺寸 */
+  // Twemoji 没有的几何符号：矢量绘制，避免真机系统字体缺字
+  function poly(n, rot, fill) {
+    return function (ctx, cx, cy, size) {
+      var r = size * 0.46;
+      ctx.save(); ctx.beginPath();
+      for (var i = 0; i < n * (fill === 'star' ? 2 : 1); i++) {
+        var m = fill === 'star' ? 2 * n : n, rr = fill === 'star' && i % 2 ? r * 0.45 : r;
+        var a = rot + i * Math.PI * 2 / m;
+        ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, size * 0.1);
+      ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.lineWidth = Math.max(2, size * 0.06); ctx.strokeStyle = '#3B2414'; ctx.stroke();
+      if (fill !== 'star') { ctx.fillStyle = '#7CC6F2'; ctx.fill(); }
+      ctx.restore();
+    };
+  }
+  var SHAPES = { '⬡': poly(6, 0, 'hex'), '⬢': poly(6, 0, 'hex'), '☆': poly(5, -Math.PI / 2, 'star') };
   E.draw = function (ctx, e, cx, cy, size) {
     var A = Game.EmojiAtlas;
     var pos = A && E.ready ? A.map[e.replace(/\ufe0f/g, '')] : null;
+    var shape = SHAPES[e];
+    if (shape) { shape(ctx, cx, cy, size); return true; }
     if (pos) {
       var full = size * A.cell / (A.cell - A.pad * 2);
       ctx.drawImage(E.img, pos[0], pos[1], A.cell, A.cell, cx - full / 2, cy - full / 2, full, full);

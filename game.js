@@ -16,6 +16,7 @@ require('./js/emoji_atlas.js');
 require('./js/emoji.js');
 require('./js/background.js');
 require('./js/level_loader.js');
+require('./js/level_layouts.js');
 require('./js/scene_build.js');
 require('./js/win.js');
 require('./js/interactions/base.js');

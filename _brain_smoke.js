@@ -48,6 +48,7 @@ load('js/ad.js');
 load('js/fx.js');
 load('js/ui.js');
 load('js/level_loader.js');
+load('js/level_layouts.js');
 load('js/scene_build.js');
 load('js/win.js');
 load('js/interactions/base.js');

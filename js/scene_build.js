@@ -145,7 +145,7 @@
     var best = null;
     for (var i = 0; i < list.length; i++) {
       var e = list[i];
-      if (!e.visible) continue;
+      if (!e.visible || e.deco) continue;
       if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h) {
         if (!best || e.z >= best.z) best = e;
       }
@@ -928,6 +928,66 @@
 
   var SceneBuild = {};
 
+  /** 天空 / 海面 / 沙滩 分区（与 background.js 的 play 背景一致） */
+  SceneBuild.zones = function (W, H) {
+    var TL = Game.Theme && Game.Theme.layout;
+    var hz = Math.round(H * 0.33), seaH = Math.round(H * 0.11), shore = hz + seaH;
+    var areaTop = TL ? TL.areaTop : Math.round(H * 0.25);
+    var barY = TL ? TL.bottomBarY : H - 86;
+    var z = {
+      sky: { top: areaTop - 6, bottom: hz + 12 },
+      sea: { top: hz + 8, bottom: shore - 2 },
+      sand: { top: shore + 16, bottom: barY - 20 }
+    };
+    for (var k in z) z[k].h = z[k].bottom - z[k].top;
+    z.k = Math.max(0.74, Math.min(1.04, z.sand.h / 300));
+    return z;
+  };
+
+  SceneBuild.applyLayout = function (ents, spec, W, H) {
+    var Z = SceneBuild.zones(W, H);
+    var byId = {};
+    ents.forEach(function (e) {
+      byId[e.id] = e;
+    });
+    spec.forEach(function (it) {
+      var id = it[0], opt = it[6] || {};
+      var zone = Z[it[2]] || Z.sand;
+      var size = it[5] * Z.k;
+      var w = size * (opt.w || 1), h = size * (opt.h || 1);
+      var e = byId[id];
+      if (!e) {
+        e = ent(id, { tappable: !!opt.tap, z: -1 });
+        e.deco = !opt.tap;
+        ents.push(e);
+        byId[id] = e;
+      }
+      if (it[1] != null) e.label = it[1];
+      e.drawW = e.drawH = null;
+      // 可点物体的热区至少 44pt（视觉尺寸不变）
+      var minHit = opt.hit || (e.deco ? 0 : 44);
+      if (minHit && Math.min(w, h) < minHit) {
+        e.drawW = w;
+        e.drawH = h;
+        w = Math.max(w, minHit);
+        h = Math.max(h, minHit);
+      }
+      var cx = it[3] * W, cy = zone.top + it[4] * zone.h;
+      cx = Math.max(6 + w / 2, Math.min(W - 6 - w / 2, cx));
+      cy = Math.max(zone.top + h / 2, Math.min(zone.bottom - h / 2, cy));
+      e.w = w;
+      e.h = h;
+      e.x = e.ox = cx - w / 2;
+      e.y = e.oy = cy - h / 2;
+      if (opt.z != null) e.z = opt.z;
+      if (opt.hide) e.visible = false;
+      e._style = it[2] === 'sand' ? null : 'sky';
+    });
+    ents.sort(function (a, b) {
+      return (a.z || 0) - (b.z || 0);
+    });
+  };
+
   SceneBuild.build = function (level, W, H) {
     var L = Game.Theme && Game.Theme.layout;
     var top = L ? L.areaTop : 130;
@@ -938,6 +998,11 @@
       ents = HAND[level.id](W, H, area);
     } else {
       ents = genericFromWin(level, W, H, area);
+    }
+    var spec = Game.LevelLayouts && Game.LevelLayouts[level.id];
+    if (spec) {
+      SceneBuild.applyLayout(ents, spec, W, H);
+      L = null; // 手工布局不再自动平移
     }
     // 把地面物体整体下移到沙滩「舞台」上（保持相对位置，命中框同步）；
     // 天空物体（太阳/云/鸟…）留在天上，除非与地面物体有遮挡关系
@@ -1025,6 +1090,7 @@
       else text = parts.emojis[i] + text;
     }
     var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+    var bw = e.drawW || e.w, bh = e.drawH || e.h;
     ctx.save();
     if (!emojis.length) {
       // 纯文字物体
@@ -1047,9 +1113,9 @@
       return;
     }
     var n = emojis.length;
-    var s = Math.min(e.h * 0.95, (e.w * 1.0) / n);
+    var s = Math.min(bh * 0.95, (bw * 1.0) / n);
     if (n === 1) {
-      var mn = Math.min(e.w, e.h), mx = Math.max(e.w, e.h);
+      var mn = Math.min(bw, bh), mx = Math.max(bw, bh);
       s = st === 'env' ? Math.min(mx * 0.95, mn * 1.3) : mn * 1.08;
     }
     if (st === 'sky') {
@@ -1061,12 +1127,12 @@
         ctx.fillRect(cx - s, cy - s, s * 2, s * 2);
       }
     } else {
-      groundShadow(ctx, cx, e.y + e.h - 2, Math.max(e.w * (st === 'env' ? 0.55 : 0.45), s * 0.5));
+      groundShadow(ctx, cx, cy + bh / 2 - 2, Math.max(bw * (st === 'env' ? 0.55 : 0.45), s * 0.5));
     }
     var startX = cx - (s * (n - 1)) / 2;
     var ey = cy - (text ? 4 : 0);
     for (var j = 0; j < n; j++) EM.draw(ctx, emojis[j], startX + j * s, ey, s * 0.86);
-    if (text) UI.tag(ctx, text, cx, e.y + e.h - 6, 11);
+    if (text) UI.tag(ctx, text, cx, cy + bh / 2 - 6, 11);
     ctx.restore();
   };
 
