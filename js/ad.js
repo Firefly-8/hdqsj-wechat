@@ -1,90 +1,158 @@
 /**
- * 广告管理器：激励视频 + Banner
- * - demo 模式（未配置广告位ID）：弹模拟确认框，保留网页版体验
- * - 正式模式（填入 adUnitId）：wx.createRewardedVideoAd / createBannerAd
- * 开通流量主后，把下方 AD_UNIT 替换为真实广告位 ID 即可切换正式模式
+ * 广告封装：激励视频 + 插屏（无 Banner）
+ * 空广告位 ID → mode:'none'，调用方走免费次数/toast 降级
  */
 (function () {
   'use strict';
 
-  // 激励视频广告位 ID（流量主开通后替换；留空 = 演示模式）
-  var REWARD_UNIT = '';
-  // Banner 广告位 ID（可选）
-  var BANNER_UNIT = '';
+  var AD = {
+    mode: 'none',
+    interstitialReady: false
+  };
 
   var rewardAd = null;
-  var bannerAd = null;
-  var pendingRewardCb = null;   // 当前等待广告关闭的"成功"回调
-  var pendingRewardCancel = null; // 当前等待广告关闭的"取消/失败"回调
+  var interstitialAd = null;
+  var pendingDone = null;
+  var pendingCancel = null;
+  var lastInterstitialAt = 0;
+  var startedAt = Date.now();
 
-  var AD = {};
+  function cfg() {
+    return Game.Config;
+  }
 
-  AD.mode = REWARD_UNIT ? 'real' : 'demo';
-
-  // 预加载激励视频（正式模式）
   AD.init = function () {
-    if (AD.mode !== 'real') return;
-    try {
-      rewardAd = wx.createRewardedVideoAd({ adUnitId: REWARD_UNIT });
-      rewardAd.onError(function (err) {
-        console.error('激励视频错误', err);
-      });
-      // 关键修复：onClose 只注册一次，避免重复 showReward 累积监听器导致重复发奖
-      rewardAd.onClose(function (res) {
-        var done = pendingRewardCb, cancel = pendingRewardCancel;
-        pendingRewardCb = null; pendingRewardCancel = null;
-        if (res && res.isEnded) { if (done) done(); }
-        else { if (cancel) cancel(); }
-      });
-      rewardAd.load().catch(function () {});
-    } catch (e) { console.error('广告初始化失败', e); }
+    var c = cfg();
+    AD.mode = c.REWARD_UNIT ? 'real' : 'none';
+    lastInterstitialAt = 0;
+    startedAt = Date.now();
 
-    // Banner（可选接入）
-    if (BANNER_UNIT) {
+    if (c.REWARD_UNIT) {
       try {
-        bannerAd = wx.createBannerAd({
-          adUnitId: BANNER_UNIT,
-          adIntervals: 30,
-          style: { left: 0, top: 0, width: 375 }
+        rewardAd = wx.createRewardedVideoAd({ adUnitId: c.REWARD_UNIT });
+        rewardAd.onError(function (err) {
+          console.error('激励视频错误', err);
+          Game.Analytics && Game.Analytics.log('reward_error', { err: String(err && err.errMsg) });
         });
-      } catch (e) { console.error('Banner 初始化失败', e); }
+        rewardAd.onClose(function (res) {
+          var done = pendingDone;
+          var cancel = pendingCancel;
+          pendingDone = null;
+          pendingCancel = null;
+          if (res && res.isEnded) {
+            Game.Analytics && Game.Analytics.log('reward_ended', {});
+            if (done) done();
+          } else {
+            Game.Analytics && Game.Analytics.log('reward_skip_close', {});
+            if (cancel) cancel();
+          }
+        });
+        rewardAd.load().catch(function () {});
+      } catch (e) {
+        console.error('激励初始化失败', e);
+        AD.mode = 'none';
+      }
+    }
+
+    if (c.INTERSTITIAL_UNIT) {
+      try {
+        interstitialAd = wx.createInterstitialAd({ adUnitId: c.INTERSTITIAL_UNIT });
+        interstitialAd.onError(function (err) {
+          console.error('插屏错误', err);
+          Game.Analytics && Game.Analytics.log('interstitial_error', { err: String(err && err.errMsg) });
+        });
+        interstitialAd.onLoad(function () {
+          AD.interstitialReady = true;
+        });
+        interstitialAd.onClose(function () {
+          AD.interstitialReady = false;
+          lastInterstitialAt = Date.now();
+          try {
+            interstitialAd.load();
+          } catch (e2) {}
+        });
+        interstitialAd.load().catch(function () {});
+      } catch (e3) {
+        console.error('插屏初始化失败', e3);
+        interstitialAd = null;
+      }
     }
   };
 
   /**
-   * 播放激励视频
-   * @param type  'energy' | 'bottle' | 'offline'  （奖励类型，回调时区分）
-   * @param onDone 观看成功回调
-   * @param onCancel 取消/失败回调（可选）
+   * 播放激励视频。无广告位时返回 false，由调用方走免费次数。
+   * @returns {boolean} 是否已尝试拉起广告
    */
-  AD.showReward = function (type, onDone, onCancel) {
-    if (AD.mode === 'demo') {
-      // 演示模式：模拟激励视频确认框
-      Game.App.openAdModal(type, onDone);
-      return;
+  AD.showReward = function (reason, onDone, onCancel) {
+    Game.Analytics && Game.Analytics.log('reward_try', { reason: reason, mode: AD.mode });
+    if (AD.mode !== 'real' || !rewardAd) {
+      return false;
     }
-    // 正式模式：把回调暂存，由 init 里注册的唯一 onClose 统一分发
-    pendingRewardCb = onDone;
-    pendingRewardCancel = onCancel;
-    rewardAd.show().catch(function () {
-      // 失败先重新加载再试一次
-      return rewardAd.load().then(function () { return rewardAd.show(); });
-    }).catch(function () {
-      pendingRewardCb = null; pendingRewardCancel = null;
-      if (onCancel) onCancel();
-    });
+    pendingDone = onDone;
+    pendingCancel = onCancel;
+    rewardAd
+      .show()
+      .catch(function () {
+        return rewardAd.load().then(function () {
+          return rewardAd.show();
+        });
+      })
+      .catch(function () {
+        pendingDone = null;
+        pendingCancel = null;
+        Game.Analytics && Game.Analytics.log('reward_show_fail', { reason: reason });
+        if (onCancel) onCancel();
+      });
+    return true;
   };
 
-  // Banner 定位（底部居中）
-  AD.showBanner = function (W) {
-    if (!bannerAd || AD.mode !== 'real') return;
-    try {
-      bannerAd.style.left = Math.floor((W - bannerAd.style.realWidth) / 2);
-      bannerAd.show();
-    } catch (e) {}
+  AD.hasRewardAd = function () {
+    return AD.mode === 'real' && !!cfg().REWARD_UNIT;
   };
-  AD.hideBanner = function () {
-    if (bannerAd) { try { bannerAd.hide(); } catch (e) {} }
+
+  AD.hasInterstitial = function () {
+    return !!(cfg().INTERSTITIAL_UNIT && interstitialAd);
+  };
+
+  /**
+   * 尝试展示插屏。开局冷却、间隔冷却；无 ID 则 no-op。
+   * @param {string} reason
+   * @param {boolean} force 忽略「每 N 关」计数（仍守冷却）
+   */
+  AD.tryInterstitial = function (reason, force) {
+    var c = cfg();
+    Game.Analytics && Game.Analytics.log('interstitial_try', { reason: reason, force: !!force });
+    if (!AD.hasInterstitial()) return false;
+
+    var now = Date.now();
+    if (now - startedAt < c.INTERSTITIAL_STARTUP_COOLDOWN_SEC * 1000) {
+      Game.Analytics && Game.Analytics.log('interstitial_blocked', { why: 'startup' });
+      return false;
+    }
+    if (now - lastInterstitialAt < c.INTERSTITIAL_COOLDOWN_SEC * 1000) {
+      Game.Analytics && Game.Analytics.log('interstitial_blocked', { why: 'cooldown' });
+      return false;
+    }
+
+    try {
+      interstitialAd
+        .show()
+        .then(function () {
+          lastInterstitialAt = Date.now();
+          Game.Analytics && Game.Analytics.log('interstitial_show', { reason: reason });
+        })
+        .catch(function () {
+          return interstitialAd.load().then(function () {
+            return interstitialAd.show();
+          });
+        })
+        .catch(function (err) {
+          Game.Analytics && Game.Analytics.log('interstitial_fail', { err: String(err && err.errMsg) });
+        });
+      return true;
+    } catch (e) {
+      return false;
+    }
   };
 
   Game.AD = AD;

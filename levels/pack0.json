@@ -1,0 +1,397 @@
+{
+  "game": "绝望岛求生记",
+  "version": "brain-teaser-iaa-v1",
+  "pack": 0,
+  "levelRange": [
+    1,
+    20
+  ],
+  "levels": [
+    {
+      "id": "lv_001",
+      "type": "tap_find",
+      "title": "找到最大的椰子",
+      "scene": "沙滩上散落着大大小小的椰子",
+      "hintSteps": [
+        "看看哪个最大",
+        "直接点最大的那个"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "biggest_coconut"
+      },
+      "failToast": "大小眼花了？再比比看",
+      "winToast": "就是它，够喝一天！",
+      "shareHook": "第一关就会找椰子了？",
+      "sourceNote": "Brain Out 类找物·比大小"
+    },
+    {
+      "id": "lv_002",
+      "type": "drag_combine",
+      "title": "把果子放进篮子",
+      "scene": "地上有几颗野果，旁边有个空篮子",
+      "hintSteps": [
+        "拖动物体可以移动",
+        "把果子拖到篮子上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "wild_fruits",
+        "to": "basket",
+        "all": true
+      },
+      "failToast": "果子还在地上晃呢",
+      "winToast": "收拾完毕，今晚有夜宵",
+      "shareHook": "拖两下就过关，你也太会了",
+      "sourceNote": "Brain Out 类拖合并·收纳"
+    },
+    {
+      "id": "lv_003",
+      "type": "unconventional",
+      "title": "找到小鸟",
+      "scene": "画面上只有椰子树和石头，看不见鸟",
+      "hintSteps": [
+        "题目文字也可以点",
+        "点题干里的「小鸟」二字"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "title_word:小鸟"
+      },
+      "failToast": "树上找遍了也没有……",
+      "winToast": "字面上的小鸟也是鸟！",
+      "shareHook": "原来答案写在题干上",
+      "sourceNote": "反逻辑点选·点题干文字"
+    },
+    {
+      "id": "lv_004",
+      "type": "tap_find",
+      "title": "石头下面有什么？",
+      "scene": "一块大石头压在沙滩上，边角露出一点东西",
+      "hintSteps": [
+        "先点石头挪开",
+        "再点露出来的贝壳"
+      ],
+      "win": {
+        "action": "multi_tap",
+        "sequence": [
+          "rock",
+          "shell"
+        ]
+      },
+      "failToast": "光盯着石头没用",
+      "winToast": "贝壳到手，运气不错",
+      "shareHook": "藏得这么浅也能算关卡？",
+      "sourceNote": "Brain Out 类找物·移开遮挡"
+    },
+    {
+      "id": "lv_005",
+      "type": "drag_combine",
+      "title": "生火取暖",
+      "scene": "地上有两根干树枝和一堆干草",
+      "hintSteps": [
+        "试试把东西合在一起",
+        "树枝拖到干草上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "sticks",
+        "to": "dry_grass"
+      },
+      "failToast": "干瞪眼生不出火",
+      "winToast": "噼啪一声，暖和了",
+      "shareHook": "原始人技能点亮",
+      "sourceNote": "Brain Out 类拖合并·合成道具"
+    },
+    {
+      "id": "lv_006",
+      "type": "tap_find",
+      "title": "找出与众不同的椰子",
+      "scene": "五个椰子排成一排，其中一个有缺口",
+      "hintSteps": [
+        "一个一个挪开看看",
+        "拖开中间那个，底下有缺口"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "move": "middle_coconut",
+        "tap": "bitten_coconut"
+      },
+      "failToast": "五个看起来都一样啊",
+      "winToast": "原来被啃过一口！",
+      "shareHook": "找茬从椰子开始",
+      "sourceNote": "找茬反逻辑·拖开揭示差异"
+    },
+    {
+      "id": "lv_007",
+      "type": "unconventional",
+      "title": "让篝火灭掉",
+      "scene": "篝火烧得很旺，旁边没有水",
+      "hintSteps": [
+        "不一定要用水",
+        "摇一摇手机，像刮风"
+      ],
+      "win": {
+        "action": "shake",
+        "durationMs": 1500
+      },
+      "failToast": "拍灭？太烫了吧",
+      "winToast": "风一吹，火灭了",
+      "shareHook": "摇一摇比灭火器好用",
+      "sourceNote": "非常规·摇一摇"
+    },
+    {
+      "id": "lv_008",
+      "type": "drag_combine",
+      "title": "装满水壶",
+      "scene": "空水壶，旁边有一汪小水洼",
+      "hintSteps": [
+        "把水壶拖到水洼上",
+        "等它装满"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "empty_kettle",
+        "to": "puddle"
+      },
+      "failToast": "空手接水可不行",
+      "winToast": "咕咚咕咚，满了",
+      "shareHook": "生存第一步：搞到水",
+      "sourceNote": "拖合并·容器接水"
+    },
+    {
+      "id": "lv_009",
+      "type": "tap_find",
+      "title": "找到躲起来的螃蟹",
+      "scene": "沙滩上有几堆沙丘和一只空壳",
+      "hintSteps": [
+        "螃蟹爱挖洞",
+        "点最大的沙丘"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "sand_mound_large"
+      },
+      "failToast": "壳是空的别点错",
+      "winToast": "夹人！吓我一跳",
+      "shareHook": "沙丘之下，必有惊喜",
+      "sourceNote": "找物·沙丘藏物"
+    },
+    {
+      "id": "lv_010",
+      "type": "unconventional",
+      "title": "关掉刺眼的阳光",
+      "scene": "烈日当空，角色捂着眼",
+      "hintSteps": [
+        "屏幕上有个太阳",
+        "把太阳拖出屏幕外"
+      ],
+      "win": {
+        "action": "drag_offscreen",
+        "target": "sun"
+      },
+      "failToast": "挡眼睛没用",
+      "winToast": "太阳搬家，凉快了",
+      "shareHook": "原来太阳可以拖走",
+      "sourceNote": "非常规·拖出屏幕"
+    },
+    {
+      "id": "lv_011",
+      "type": "drag_combine",
+      "title": "修好破渔网",
+      "scene": "破渔网和一卷绳子放在一起",
+      "hintSteps": [
+        "绳子可以补网",
+        "把绳子拖到渔网上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "rope",
+        "to": "broken_net"
+      },
+      "failToast": "破网捞不到鱼",
+      "winToast": "补好了，今晚吃海鲜",
+      "shareHook": "心灵手巧荒岛人",
+      "sourceNote": "拖合并·修补工具"
+    },
+    {
+      "id": "lv_012",
+      "type": "tap_find",
+      "title": "数一数有几根香蕉",
+      "scene": "一串香蕉，有的藏在叶子后面",
+      "hintSteps": [
+        "拨开叶子再数",
+        "别漏掉藏着的"
+      ],
+      "win": {
+        "action": "reveal_then_count",
+        "hide": "leaf",
+        "answer": 7
+      },
+      "failToast": "数错了再来",
+      "winToast": "一共七根，别饿着",
+      "shareHook": "叶子后面还有货",
+      "sourceNote": "找物·遮挡计数"
+    },
+    {
+      "id": "lv_013",
+      "type": "unconventional",
+      "title": "找到入口",
+      "scene": "密林一堵，看不见路",
+      "hintSteps": [
+        "读题要认真",
+        "点题干里的「入口」两字"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "title_word:入口"
+      },
+      "failToast": "树缝里钻不进去",
+      "winToast": "文字就是入口！",
+      "shareHook": "字面意思玩到飞起",
+      "sourceNote": "反逻辑·点题干"
+    },
+    {
+      "id": "lv_014",
+      "type": "tap_find",
+      "title": "找出最暗的颜色",
+      "scene": "画面上有红黄蓝绿几块色板",
+      "hintSteps": [
+        "别只看色板",
+        "题干文字是黑色的"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "title_text"
+      },
+      "failToast": "色板里没有最暗的",
+      "winToast": "黑字本色，最暗的就是它",
+      "shareHook": "文字也可以是答案",
+      "sourceNote": "反逻辑找物·点文字颜色"
+    },
+    {
+      "id": "lv_015",
+      "type": "drag_combine",
+      "title": "给椰子开盖",
+      "scene": "完整椰子和一块锋利石片",
+      "hintSteps": [
+        "石片可以当刀",
+        "拖到椰子上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "sharp_stone",
+        "to": "coconut"
+      },
+      "failToast": "咬开？牙会断",
+      "winToast": "咔嚓，椰汁出来了",
+      "shareHook": "石器时代开罐器",
+      "sourceNote": "拖合并·工具开物"
+    },
+    {
+      "id": "lv_016",
+      "type": "unconventional",
+      "title": "哄睡着的鹦鹉安静",
+      "scene": "鹦鹉一直叫，角色睡不着",
+      "hintSteps": [
+        "试试物理操作",
+        "摇一摇哄它睡"
+      ],
+      "win": {
+        "action": "shake",
+        "durationMs": 2000
+      },
+      "failToast": "堵耳朵治标不治本",
+      "winToast": "摇着摇着它睡着了",
+      "shareHook": "哄鸟比哄娃还难",
+      "sourceNote": "非常规·摇一摇哄睡"
+    },
+    {
+      "id": "lv_017",
+      "type": "tap_find",
+      "title": "找到藏在羊群里的狼",
+      "scene": "几只绵羊站着，其中一只眼神不对",
+      "hintSteps": [
+        "把肉拖到羊面前试试",
+        "眼神变了的就是狼"
+      ],
+      "win": {
+        "action": "drag_probe_then_tap",
+        "probe": "meat",
+        "targets": "sheep",
+        "tap": "wolf_sheep"
+      },
+      "failToast": "都长得像羊啊",
+      "winToast": "露出真面目了吧！",
+      "shareHook": "披着羊皮也瞒不过肉",
+      "sourceNote": "找茬·诱饵揭示"
+    },
+    {
+      "id": "lv_018",
+      "type": "drag_combine",
+      "title": "做简易筏子",
+      "scene": "三根原木和一根绳子",
+      "hintSteps": [
+        "先把原木并在一起",
+        "再用绳子捆上"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "logs",
+            "to": "each_other"
+          },
+          {
+            "from": "rope",
+            "to": "bundled_logs"
+          }
+        ]
+      },
+      "failToast": "散木头浮不起来",
+      "winToast": "筏子成型，出海！",
+      "shareHook": "鲁滨逊第一步",
+      "sourceNote": "拖合并·多步合成"
+    },
+    {
+      "id": "lv_019",
+      "type": "tap_find",
+      "title": "帮他找回戒指",
+      "scene": "沙滩上有狗粮罐和一只小狗",
+      "hintSteps": [
+        "先打开狗粮",
+        "喂小狗，它会吐出戒指"
+      ],
+      "win": {
+        "action": "sequence",
+        "steps": [
+          "tap_dogfood",
+          "drag_to_dog",
+          "tap_ring"
+        ]
+      },
+      "failToast": "挖沙挖半天……",
+      "winToast": "小狗藏私房货呢",
+      "shareHook": "狗狗的秘密储物柜",
+      "sourceNote": "找物·多步喂食揭示"
+    },
+    {
+      "id": "lv_020",
+      "type": "unconventional",
+      "title": "让鱼回到水里",
+      "scene": "鱼躺在沙滩上，水在画面下方",
+      "hintSteps": [
+        "换个重力方向",
+        "把手机倒过来"
+      ],
+      "win": {
+        "action": "device_rotate",
+        "orientation": "upside_down"
+      },
+      "failToast": "用手推它太慢",
+      "winToast": "倒过来，鱼「游」回去了",
+      "shareHook": "物理外挂已开启",
+      "sourceNote": "非常规·旋转设备"
+    }
+  ]
+}

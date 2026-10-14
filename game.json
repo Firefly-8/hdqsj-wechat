@@ -4,5 +4,10 @@
   "networkTimeout": {
     "request": 10000
   },
-  "subpackages": []
+  "subpackages": [
+    {
+      "name": "levels_pack1",
+      "root": "levels_pack1/"
+    }
+  ]
 }
