@@ -104,3 +104,9 @@ SHARE_HINT_DAILY_CAP: 3
 ## 合规
 
 个人主体 IAA；不诱导强制分享；不编造广告位 ID。
+
+## 视觉资源（贴纸风 UI）
+- 背景、按钮、木牌、面板全部由程序绘制（`js/background.js`、`js/ui.js`），不使用 `images/`；`images/`、`_legacy/`、`tools/` 已加入 `project.config.json` 的 `packOptions.ignore`。
+- `assets/ui/emoji.png`：Twemoji（CC-BY 4.0，© Twitter/jdecked）预渲染贴纸雪碧图；缺失时回退系统 emoji。
+- `assets/fonts/kuaile.ttf`：站酷快乐体（OFL）子集，由 `wx.loadFont` 加载，失败回退系统字体。
+- 修改文案或 emoji 后重新生成：`NODE_PATH=<含 canvas、sharp 的 node_modules> node tools/build_ui_assets.js <完整字体> <svg缓存目录>`

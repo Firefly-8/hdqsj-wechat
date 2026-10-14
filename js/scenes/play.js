@@ -68,22 +68,29 @@
     Game.App.refreshShareMenu(level, index);
   };
 
+  /** 题目木牌布局（标题字号自适应），供绘制与题干文字命中共用 */
+  Play._boardLayout = function () {
+    var L = Game.Theme.layout;
+    var W = Game.W;
+    var x = 22, w = W - 44;
+    var title = (Play.level && Play.level.title) || '';
+    var ctx = Game.ctx;
+    var size = Game.UI.fitSize(ctx, title, w - 48, 25, Game.Theme.display, 15);
+    ctx.font = Game.Theme.display(size);
+    var tw = ctx.measureText(title).width;
+    return { x: x, y: L.boardY, w: w, h: L.boardH, title: title, size: size, tw: tw, ty: L.boardY + 30 };
+  };
+
   Play._buildTitleHits = function () {
     Play.titleHits = [];
     var level = Play.level;
     if (!level) return;
     var title = level.title || '';
-    var W = Game.W;
-    // whole title as title_text
-    Play.titleHits.push({
-      id: 'title_text',
-      word: null,
-      x: 24,
-      y: 72,
-      w: W - 48,
-      h: 36
-    });
-    // extract possible words from win targets
+    var B = Play._boardLayout();
+    var ctx = Game.ctx;
+    ctx.font = Game.Theme.display(B.size);
+    var x0 = Game.W / 2 - B.tw / 2;
+    Play.titleHits.push({ id: 'title_text', word: null, x: B.x + 10, y: B.ty - 20, w: B.w - 20, h: 40 });
     var words = [];
     var w = level.win || {};
     function collect(v) {
@@ -92,60 +99,51 @@
       else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { collect(v[k]); });
     }
     collect(w);
-    // also common chars in title for unconventional
     ['小鸟', '入口', '怪物', '这里', '一切', '心'].forEach(function (wd) {
       if (title.indexOf(wd) >= 0 && words.indexOf(wd) < 0) words.push(wd);
     });
     words.forEach(function (wd) {
       var idx = title.indexOf(wd);
       if (idx < 0) return;
-      // approximate position by char index
-      var charW = Math.min(22, (W - 48) / Math.max(title.length, 1));
-      Play.titleHits.push({
-        id: 'title_word:' + wd,
-        word: wd,
-        x: 24 + idx * charW,
-        y: 72,
-        w: Math.max(36, wd.length * charW),
-        h: 36
-      });
+      var px = x0 + ctx.measureText(title.slice(0, idx)).width;
+      var ww = ctx.measureText(wd).width;
+      Play.titleHits.push({ id: 'title_word:' + wd, word: wd, x: px - 6, y: B.ty - 20, w: Math.max(36, ww + 12), h: 40 });
     });
   };
 
   Play._layoutButtons = function () {
     var W = Game.W;
     var H = Game.H;
-    var y = H - 100;
-    Play.buttons = [
-      { id: 'hint', x: 16, y: y, w: 80, h: 40, label: '提示', bg: '#3A5A7A', r: 10, font: '14px sans-serif' },
-      { id: 'skip', x: 106, y: y, w: 80, h: 40, label: '跳过', bg: '#6A5A4A', r: 10, font: '14px sans-serif' },
-      { id: 'share', x: 196, y: y, w: 80, h: 40, label: '分享', bg: '#2A6B4F', r: 10, font: '14px sans-serif' },
-      { id: 'home', x: 286, y: y, w: 72, h: 40, label: '大厅', bg: '#4A4A4A', r: 10, font: '14px sans-serif' }
+    var L = Game.Theme.layout;
+    var save = Game.save || {};
+    var by = L.bottomBarY;
+    var cap = L.capsule;
+    var r = 17;
+    Play.topButtons = [
+      Game.UI.iconHit({ id: 'home', cx: cap.left - 10 - r, cy: L.barY, r: r, icon: '🏠', base: '#6CC3E0' }),
+      Game.UI.iconHit({ id: 'sound', cx: cap.left - 20 - r * 3, cy: L.barY, r: r, icon: save.soundOn === false ? '🔇' : '🔊', base: '#F3E2BE' })
     ];
+    Play.buttons = [
+      { id: 'hint', x: 20, y: by, w: 192, h: 60, label: '看提示', kind: 'primary', icon: '💡', badge: Game.AD.hasRewardAd() ? '' : save.hintFreeLeft },
+      { id: 'skip', x: 228, y: by + 6, w: W - 248, h: 52, label: '跳过', kind: 'secondary', icon: '⏭️', badge: Game.AD.hasRewardAd() ? '' : save.skipFreeLeft }
+    ].concat(Play.topButtons);
     if (Play.overlay && Play.overlay.type === 'win') {
+      var P = Play._winPanel();
       Play.buttons = [
-        {
-          id: 'next',
-          x: W * 0.15,
-          y: H * 0.58,
-          w: W * 0.7,
-          h: 52,
-          label: '下一关',
-          bg: '#2A6B4F',
-          r: 14
-        },
-        {
-          id: 'home',
-          x: W * 0.15,
-          y: H * 0.58 + 66,
-          w: W * 0.7,
-          h: 44,
-          label: '回大厅',
-          bg: '#4A4A4A',
-          r: 12
-        }
+        { id: 'next', x: P.x + 26, y: P.y + P.h - 74, w: P.w - 52, h: 58, label: '下一关', kind: 'primary', fontSize: 28 },
+        Game.UI.iconHit({ id: 'home', cx: W / 2 - 50, cy: P.y + P.h + 50, r: 24, icon: '🏠', base: '#F3E2BE', label: '回岛上' }),
+        Game.UI.iconHit({ id: 'share', cx: W / 2 + 50, cy: P.y + P.h + 50, r: 24, icon: '📤', base: '#6CC3E0', label: '喊朋友' })
       ];
+    } else if (Play.overlay && Play.overlay.type === 'error') {
+      Play.buttons = [{ id: 'home', x: W * 0.2, y: H * 0.52, w: W * 0.6, h: 52, label: '回到岛上', kind: 'primary' }];
     }
+  };
+
+  Play._winPanel = function () {
+    var W = Game.W, H = Game.H;
+    var h = 300;
+    var y = Math.max(Game.Theme.layout.capsule.bottom + 110, Math.round(H * 0.5 - h / 2 - 10));
+    return { x: 30, y: y, w: W - 60, h: h };
   };
 
   Play._onWin = function () {
@@ -264,132 +262,142 @@
   Play.draw = function (ctx) {
     var W = Game.W;
     var H = Game.H;
+    var UI = Game.UI, T = Game.Theme, L = T.layout;
     var level = Play.level;
+    var ov = Play.overlay;
+    if (!ov || ov.type !== 'error') Play._layoutButtons();
 
-    // bg
-    var bg = Game.bgAssets && Game.bgAssets.beach;
-    if (bg && bg.width) {
-      ctx.drawImage(bg, 0, 0, W, H);
-      ctx.fillStyle = 'rgba(250,244,230,0.72)';
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      var g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#B8D4E8');
-      g.addColorStop(1, '#E8D5B0');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
+    Game.BG.draw(ctx, 'play');
+
+    if (level && (!ov || ov.type !== 'win')) {
+      // 题目木牌：麻绳吊挂
+      var B = Play._boardLayout();
+      UI.plank(ctx, B.x, B.y, B.w, B.h, { rows: 2, r: 14 });
+      UI.outlineText(ctx, B.title, W / 2, B.ty, B.size, '#FFF6DA', 'rgba(59,36,20,0.95)');
+      ctx.font = T.body(12.5, 'bold');
+      var sub = UI.wrap(ctx, level.scene || '', B.w - 40, 2);
+      for (var si = 0; si < sub.length; si++) {
+        UI.text(ctx, sub[si], W / 2, B.y + (sub.length > 1 ? 54 : 61) + si * 16, 12.5, '#5A3216', 'bold');
+      }
     }
 
-    // header
-    ctx.fillStyle = '#2A241C';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('第 ' + (Play.index + 1) + ' 关', 16, 36);
-    if (level) {
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#5A5048';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(level.type, W - 16, 36);
+    // 顶栏：关卡木牌 + 圆钮（避开胶囊）
+    var showLevelUI = !ov || ov.type !== 'win';
+    if (showLevelUI) {
+      UI.plank(ctx, 14, L.barY - 18, 104, 36, { rows: 1, r: 12 });
+      UI.outlineText(ctx, '第 ' + (Play.index + 1) + ' 关', 66, L.barY, 18, T.CREAM_TXT);
+      for (var tb = 0; tb < (Play.topButtons || []).length; tb++) {
+        UI.iconButton(ctx, Play.topButtons[tb], Play.pressed === Play.topButtons[tb].id);
+      }
     }
 
-    // title
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#1A1814';
-    ctx.font = 'bold 20px "Songti SC", "Noto Serif SC", serif';
-    var title = (level && level.title) || '';
-    ctx.fillText(title, W / 2, 92);
-
-    // scene desc
-    if (level && !Play.overlay) {
-      ctx.font = '12px sans-serif';
-      ctx.fillStyle = '#5A5048';
-      wrapText(ctx, level.scene || '', W / 2, 112, W - 40, 16);
-    }
-
-    // entities
-    if (Play.scene && (!Play.overlay || Play.overlay.type === 'win')) {
+    // 物体
+    if (Play.scene && (!ov || ov.type === 'win')) {
       var ents = Play.scene.entities.slice().sort(function (a, b) {
         return (a.z || 0) - (b.z || 0);
       });
       for (var i = 0; i < ents.length; i++) Game.SceneBuild.drawEntity(ctx, ents[i]);
     }
 
-    // progress for wait/shake
-    if (Play.runner && !Play.overlay) {
-      var prog = Play.runner.progressText();
+    if (!ov) {
+      // 进度（等待/摇一摇类）
+      var prog = Play.runner && Play.runner.progressText();
       if (prog) {
-        ctx.fillStyle = '#2A6B4F';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(prog, W / 2, H - 120);
+        ctx.font = T.display(16);
+        var pw = ctx.measureText(prog).width + 36;
+        UI.pill(ctx, W / 2 - pw / 2, L.bottomBarY - 52, pw, 32);
+        UI.text(ctx, prog, W / 2, L.bottomBarY - 36, 14, T.INK_SOFT, '900');
       }
-    }
-
-    // free counts
-    if (Game.save && !Play.overlay) {
-      ctx.font = '11px sans-serif';
-      ctx.fillStyle = '#6A6058';
-      ctx.textAlign = 'left';
-      ctx.fillText(
-        '免费提示 ' + Game.save.hintFreeLeft + ' · 跳过 ' + Game.save.skipFreeLeft,
-        16,
-        H - 110
-      );
-    }
-
-    Play._layoutButtons();
-    if (!Play.overlay || Play.overlay.type === 'win') {
       for (var b = 0; b < Play.buttons.length; b++) {
-        Game.UI.drawButton(ctx, Play.buttons[b], Play.pressed === Play.buttons[b].id);
+        var bt = Play.buttons[b];
+        if (bt.cx != null) continue;
+        UI.drawButton(ctx, bt, Play.pressed === bt.id);
       }
     }
 
-    // overlays
-    if (Play.overlay) {
-      if (Play.overlay.type === 'win') {
-        ctx.fillStyle = 'rgba(20,16,12,0.55)';
+    if (ov) {
+      if (ov.type === 'win') Play._drawWin(ctx);
+      else {
+        ctx.fillStyle = T.MASK;
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#FFF8EE';
-        ctx.font = 'bold 26px "Songti SC", serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('过关！', W / 2, H * 0.38);
-        ctx.font = '15px sans-serif';
-        ctx.fillText(Play.overlay.text || '', W / 2, H * 0.38 + 36);
-        for (var j = 0; j < Play.buttons.length; j++) {
-          Game.UI.drawButton(ctx, Play.buttons[j], Play.pressed === Play.buttons[j].id);
-        }
-      } else {
-        ctx.fillStyle = 'rgba(20,16,12,0.45)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#FFF8EE';
-        ctx.font = '16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(Play.overlay.text || '', W / 2, H * 0.45);
-        if (Play.overlay.type === 'error') {
-          Game.UI.drawButton(
-            ctx,
-            { id: 'home', x: W * 0.2, y: H * 0.52, w: W * 0.6, h: 44, label: '回大厅', bg: '#4A4A4A', r: 12 },
-            Play.pressed === 'home'
-          );
+        var pw2 = W - 80, ph2 = ov.type === 'error' ? 170 : 96;
+        var py2 = H * 0.5 - ph2 / 2 - 20;
+        UI.paper(ctx, 40, py2, pw2, ph2, 22);
+        ctx.font = T.body(15, '900');
+        var lines = UI.wrap(ctx, ov.text || '', pw2 - 40, 3);
+        for (var li = 0; li < lines.length; li++) UI.text(ctx, lines[li], W / 2, py2 + 36 + li * 22, 15, T.INK, '900');
+        if (ov.type === 'error') {
+          Play._layoutButtons();
+          var eb = Play.buttons[0];
+          eb.y = py2 + ph2 - 74;
+          UI.drawButton(ctx, eb, Play.pressed === 'home');
         }
       }
     }
   };
 
-  function wrapText(ctx, text, x, y, maxW, lineH) {
-    var chars = text.split('');
-    var line = '';
-    var yy = y;
-    for (var i = 0; i < chars.length; i++) {
-      var test = line + chars[i];
-      if (ctx.measureText(test).width > maxW && line) {
-        ctx.fillText(line, x, yy);
-        line = chars[i];
-        yy += lineH;
-      } else line = test;
+  /** 胜利弹窗：放射光、金星、飘带、缝线纸面板 */
+  Play._drawWin = function (ctx) {
+    var W = Game.W, H = Game.H, UI = Game.UI, T = Game.Theme;
+    var P = Play._winPanel();
+    var t = Game.BG.t;
+    ctx.fillStyle = T.MASK;
+    ctx.fillRect(0, 0, W, H);
+    var cy = P.y + 60;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    UI.rays(ctx, W / 2, cy, Math.max(W, H), 16, 'rgba(255,220,120,0.10)', t * 0.15);
+    ctx.restore();
+    var rg = ctx.createRadialGradient(W / 2, cy, 10, W / 2, cy, 260);
+    rg.addColorStop(0, 'rgba(255,230,140,0.5)');
+    rg.addColorStop(1, 'rgba(255,230,140,0)');
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, W, H);
+    UI.paper(ctx, P.x, P.y, P.w, P.h, 26);
+    UI.ribbon(ctx, W / 2, P.y - 26, P.w - 26, 54);
+    UI.title(ctx, '过关啦', W / 2, P.y - 2, 34, { depth: 3, grad: ['#FFFFFF', '#FFF2C2'] });
+    UI.star(ctx, W / 2 - 66, P.y - 62, 20, -0.25);
+    UI.star(ctx, W / 2, P.y - 78, 28, 0);
+    UI.star(ctx, W / 2 + 66, P.y - 62, 20, 0.25);
+    // 主视觉：本关关键物体（优先胜利相关实体），否则 😎
+    var hero = Play._winHero();
+    var hy = P.y + 104;
+    var hg = ctx.createRadialGradient(W / 2, hy, 5, W / 2, hy, 76);
+    hg.addColorStop(0, 'rgba(255,214,90,0.5)');
+    hg.addColorStop(1, 'rgba(255,214,90,0)');
+    ctx.fillStyle = hg;
+    ctx.fillRect(P.x, hy - 76, P.w, 152);
+    Game.Emoji.draw(ctx, hero, W / 2, hy, 84);
+    ctx.font = T.body(16, '900');
+    var lines = UI.wrap(ctx, (Play.overlay && Play.overlay.text) || '过关！', P.w - 48, 2);
+    for (var i = 0; i < lines.length; i++) UI.text(ctx, lines[i], W / 2, P.y + 176 + i * 22 - (lines.length - 1) * 8, 16, T.INK, '900');
+    if (Play.level && Play.level.shareHook) {
+      ctx.font = T.body(12.5, 'bold');
+      var sh = UI.wrap(ctx, Play.level.shareHook, P.w - 56, 1)[0];
+      UI.text(ctx, sh, W / 2, P.y + 208, 12.5, T.SUB, 'bold');
     }
-    if (line) ctx.fillText(line, x, yy);
-  }
+    for (var j = 0; j < Play.buttons.length; j++) {
+      var b = Play.buttons[j];
+      if (b.cx != null) UI.iconButton(ctx, b, Play.pressed === b.id);
+      else UI.drawButton(ctx, b, Play.pressed === b.id);
+    }
+  };
+
+  Play._winHero = function () {
+    var lv = Play.level, sc = Play.scene;
+    var EM = Game.Emoji;
+    if (lv && sc && lv.win) {
+      var ids = [lv.win.target, lv.win.to, lv.win.from, lv.win.tap];
+      for (var i = 0; i < ids.length; i++) {
+        var e = typeof ids[i] === 'string' ? sc.find(ids[i]) : null;
+        if (e) {
+          var em = EM.split(e.label).emojis;
+          if (em.length && EM.has(em[0])) return em[0];
+        }
+      }
+    }
+    return '😎';
+  };
 
   Play.onTouchStart = function (x, y, touches) {
     Play.pressed = null;
@@ -397,11 +405,6 @@
 
     // overlay buttons
     if (Play.overlay) {
-      if (Play.overlay.type === 'error') {
-        var hb = { id: 'home', x: Game.W * 0.2, y: Game.H * 0.52, w: Game.W * 0.6, h: 44 };
-        if (Game.UI.hit(hb, x, y)) Play.pressed = 'home';
-        return;
-      }
       for (var i = 0; i < Play.buttons.length; i++) {
         if (Game.UI.hit(Play.buttons[i], x, y)) {
           Play.pressed = Play.buttons[i].id;
@@ -461,9 +464,6 @@
       for (var i = 0; i < Play.buttons.length; i++) {
         if (Play.buttons[i].id === id) btn = Play.buttons[i];
       }
-      if (Play.overlay && Play.overlay.type === 'error') {
-        btn = { id: 'home', x: Game.W * 0.2, y: Game.H * 0.52, w: Game.W * 0.6, h: 44 };
-      }
       if (btn && Game.UI.hit(btn, x, y)) {
         if (id === 'hint') {
           // if long-press win consumed, skip normal hint
@@ -473,6 +473,12 @@
         } else if (id === 'skip') Play.trySkip();
         else if (id === 'share') Game.App.shareFromPlay();
         else if (id === 'home') Game.App.goHome(true);
+        else if (id === 'sound') {
+          Game.save.soundOn = Game.save.soundOn === false;
+          Game.Storage.save(Game.save);
+          Game.FX.toast(Game.save.soundOn ? '音效已开启' : '音效已关闭');
+          Play._layoutButtons();
+        }
         else if (id === 'next') {
           Game.App.goPlay(Play.index + 1);
         }

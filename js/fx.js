@@ -20,7 +20,7 @@
   };
 
   FX.sparkle = function (x, y, color) {
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 16; i++) {
       var a = Math.random() * Math.PI * 2;
       var sp = 50 + Math.random() * 80;
       particles.push({
@@ -29,7 +29,7 @@
         vx: Math.cos(a) * sp,
         vy: Math.sin(a) * sp - 20,
         t: 0,
-        color: color || '#E8763A',
+        color: color || '#FFC93A',
         size: 2 + Math.random() * 3
       });
     }
@@ -56,25 +56,29 @@
   };
 
   FX.draw = function (ctx, W) {
+    var UI = Game.UI, T = Game.Theme, L = T.layout;
     if (toastBox) {
       var alpha = 1;
       if (toastBox.t < 120) alpha = toastBox.t / 120;
       else if (toastBox.t > toastBox.dur - 200) alpha = (toastBox.dur - toastBox.t) / 200;
+      var pop = toastBox.t < 160 ? 0.9 + 0.1 * (toastBox.t / 160) : 1;
       ctx.save();
       ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-      var tw = Math.min(W - 40, ctx.measureText ? 280 : 280);
-      var text = toastBox.text;
-      ctx.font = '14px sans-serif';
-      var mw = Math.min(W - 48, Math.max(160, ctx.measureText(text).width + 36));
+      ctx.font = T.body(14, '900');
+      var lines = UI.wrap(ctx, toastBox.text, W - 96, 2);
+      var lw = 0;
+      for (var li = 0; li < lines.length; li++) lw = Math.max(lw, ctx.measureText(lines[li]).width);
+      var mw = Math.min(W - 40, Math.max(150, lw + 44));
+      var mh = 22 + lines.length * 19;
+      var y = (L ? L.bottomBarY : Game.H - 90) - mh - 26;
       var x = (W - mw) / 2;
-      var y = 56;
-      ctx.fillStyle = 'rgba(30,24,18,0.88)';
-      roundRect(ctx, x, y, mw, 40, 10);
-      ctx.fill();
-      ctx.fillStyle = '#FFF8EE';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, W / 2, y + 20);
+      ctx.translate(W / 2, y + mh / 2);
+      ctx.scale(pop, pop);
+      ctx.translate(-W / 2, -(y + mh / 2));
+      UI.pill(ctx, x, y, mw, mh, {});
+      for (var lj = 0; lj < lines.length; lj++) {
+        UI.text(ctx, lines[lj], W / 2, y + mh / 2 + (lj - (lines.length - 1) / 2) * 19, 14, T.INK, '900');
+      }
       ctx.restore();
     }
 
@@ -82,10 +86,7 @@
       var f = floaties[i];
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - f.t);
-      ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(f.text, f.x, f.y);
+      UI.outlineText(ctx, f.text, f.x, f.y, 18, '#FFF3A0');
       ctx.restore();
     }
 
@@ -93,10 +94,12 @@
       var p = particles[j];
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - p.t / 0.6);
+      UI.starPath(ctx, p.x, p.y, p.size * 1.8, p.size * 0.8, p.t * 6);
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = T.INK;
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.restore();
     }
   };

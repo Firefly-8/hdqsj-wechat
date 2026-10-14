@@ -21,52 +21,17 @@
   Home._layout = function () {
     var W = Game.W;
     var H = Game.H;
+    var L = Game.Theme.layout;
     var save = Game.save;
     var idx = (save && save.levelIndex) || 0;
     var started = save && (save.clearedMax >= 0 || idx > 0);
+    var by = L.bottomBarY - 96;
+    Home.levelTag = started ? '第 ' + (idx + 1) + ' 关' : '';
     Home.buttons = [
-      {
-        id: 'play',
-        x: W * 0.15,
-        y: H * 0.62,
-        w: W * 0.7,
-        h: 52,
-        label: started ? '继续闯关 · 第 ' + (idx + 1) + ' 关' : '开始闯关',
-        bg: '#2A6B4F',
-        r: 14
-      },
-      {
-        id: 'share',
-        x: W * 0.15,
-        y: H * 0.62 + 68,
-        w: W * 0.7,
-        h: 46,
-        label: '分享给好友',
-        bg: '#3A5A7A',
-        r: 12
-      },
-      {
-        id: 'reset',
-        x: W * 0.15,
-        y: H * 0.62 + 128,
-        w: W * 0.32,
-        h: 40,
-        label: '重新开始',
-        bg: '#6A5A4A',
-        font: '13px sans-serif',
-        r: 10
-      },
-      {
-        id: 'sound',
-        x: W * 0.53,
-        y: H * 0.62 + 128,
-        w: W * 0.32,
-        h: 40,
-        label: save && save.soundOn === false ? '音效:关' : '音效:开',
-        bg: '#6A5A4A',
-        font: '13px sans-serif',
-        r: 10
-      }
+      { id: 'play', x: 48, y: by, w: W - 96, h: 68, label: started ? '继续闯关' : '开始闯关', kind: 'primary', fontSize: 30 },
+      Game.UI.iconHit({ id: 'share', cx: W / 2 - 78, cy: by + 118, r: 25, icon: '📤', base: '#6CC3E0', label: '喊朋友', labelColor: '#5A3216' }),
+      Game.UI.iconHit({ id: 'sound', cx: W / 2, cy: by + 118, r: 25, icon: save && save.soundOn === false ? '🔇' : '🔊', base: '#F3E2BE', label: '音效', labelColor: '#5A3216' }),
+      Game.UI.iconHit({ id: 'reset', cx: W / 2 + 78, cy: by + 118, r: 25, icon: '🔄', base: '#F3E2BE', label: '从头玩', labelColor: '#5A3216' })
     ];
   };
 
@@ -77,51 +42,39 @@
   Home.draw = function (ctx) {
     var W = Game.W;
     var H = Game.H;
-    var cfg = Game.Config;
+    var UI = Game.UI, T = Game.Theme, L = T.layout;
+    Game.BG.draw(ctx, 'home');
 
-    // beach bg
-    var bg = Game.bgAssets && Game.bgAssets.beach;
-    if (bg && bg.width) {
-      ctx.drawImage(bg, 0, 0, W, H);
-      ctx.fillStyle = 'rgba(20,30,40,0.35)';
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      var g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, '#7EB6D9');
-      g.addColorStop(0.45, '#F0D5A0');
-      g.addColorStop(1, '#C9A66B');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-    }
+    // 主视觉：漂浮小岛（唯一记忆点）
+    var bob = Math.sin(Home.bob * 1.6) * 5;
+    var iy = Math.max(L.capsule.bottom + 90, H * 0.24);
+    var gl = ctx.createRadialGradient(W / 2, iy, 10, W / 2, iy, 140);
+    gl.addColorStop(0, 'rgba(255,250,220,0.8)');
+    gl.addColorStop(1, 'rgba(255,250,220,0)');
+    ctx.fillStyle = gl;
+    ctx.fillRect(0, iy - 140, W, 280);
+    Game.Emoji.draw(ctx, '🏝️', W / 2, iy + bob, 140);
 
-    // floating island mark
-    var bob = Math.sin(Home.bob * 1.6) * 6;
+    var ty = iy + 118;
+    UI.title(ctx, '绝望岛', W / 2 - 4, ty, 58, { depth: 6 });
+    UI.title(ctx, '求生记', W / 2 + 60, ty + 52, 40, { depth: 4, grad: ['#FFFFFF', '#BDEBFF', '#5EC8F0'] });
     ctx.save();
-    ctx.font = '64px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🏝️', W / 2, H * 0.28 + bob);
+    ctx.translate(108, ty + 98);
+    ctx.rotate(-0.06);
+    UI.plank(ctx, -74, -15, 132, 30, { rows: 1, r: 8 });
+    UI.text(ctx, '动动脑子活下去', -8, 0, 12.5, T.CREAM_TXT, '900');
     ctx.restore();
-
-    ctx.fillStyle = '#FFF8EE';
-    ctx.font = 'bold 28px "Songti SC", "Noto Serif SC", serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(cfg.APP_NAME, W / 2, H * 0.42);
-
-    ctx.font = '14px sans-serif';
-    ctx.fillStyle = 'rgba(255,248,238,0.9)';
-    ctx.fillText(cfg.TAGLINE, W / 2, H * 0.42 + 32);
-
-    var save = Game.save;
-    if (save) {
-      ctx.font = '12px sans-serif';
-      ctx.fillStyle = 'rgba(255,248,238,0.75)';
-      var cleared = save.clearedMax >= 0 ? '已过 ' + (save.clearedMax + 1) + ' 关' : '新存档';
-      ctx.fillText(cleared + ' · 提示剩余 ' + save.hintFreeLeft, W / 2, H * 0.42 + 56);
-    }
 
     Home._layout();
     for (var i = 0; i < Home.buttons.length; i++) {
-      Game.UI.drawButton(ctx, Home.buttons[i], Home.pressed === Home.buttons[i].id);
+      var b = Home.buttons[i];
+      if (b.cx != null) UI.iconButton(ctx, b, Home.pressed === b.id);
+      else UI.drawButton(ctx, b, Home.pressed === b.id);
+    }
+    if (Home.levelTag) {
+      var pb = Home.buttons[0];
+      UI.plank(ctx, W / 2 - 50, pb.y - 18, 100, 26, { rows: 1, r: 8 });
+      UI.text(ctx, Home.levelTag, W / 2, pb.y - 5, 12.5, T.CREAM_TXT, '900');
     }
   };
 

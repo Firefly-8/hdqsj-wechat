@@ -28,12 +28,16 @@
     Game.W = Game.Config.LOGICAL_W;
     Game.H = Math.round(Game.Config.LOGICAL_W * Game.H_RAW / Game.W_RAW);
 
+    // 字体须在创建画布前加载
+    Game.Theme.loadFonts();
     var canvas = wx.createCanvas();
     var ctx = canvas.getContext('2d');
     canvas.width = Game.W_RAW * Game.DPR;
     canvas.height = Game.H_RAW * Game.DPR;
     var scale = canvas.width / Game.W;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    Game.RENDER_SCALE = Math.min(3, scale);
+    Game.Theme.computeLayout(sys);
 
     Game.canvas = canvas;
     Game.ctx = ctx;
@@ -42,13 +46,8 @@
     Game.LevelLoader.initPack0();
     Game.AD.init();
 
-    // preload beach bg
-    Game.bgAssets = {};
-    try {
-      var img = wx.createImage();
-      img.src = 'images/bg_beach.jpg';
-      Game.bgAssets.beach = img;
-    } catch (e) {}
+    // 贴纸 emoji 雪碧图（背景为程序绘制，不再加载 images/）
+    Game.Emoji.load();
 
     Game.Analytics && Game.Analytics.log('app_enter', {
       pack0: Game.LevelLoader.pack0Count(),
@@ -101,6 +100,7 @@
       var sc = currentScene();
       if (sc && sc.update) sc.update(dt);
       Game.FX.update(dt);
+      Game.BG.update(dt);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       if (sc && sc.draw) sc.draw(ctx);
       Game.FX.draw(ctx, Game.W);

@@ -110,7 +110,7 @@
     cloth: '🦺',
     hole: '🕳️',
     plank: '🧱',
-    nails: '钉子',
+    nails: '🔩',
     filter: '🧻',
     bottle: '🍼',
     dirty: '🫗',
@@ -482,7 +482,7 @@
           y: area.y + 60,
           w: W - 80,
           h: 180,
-          label: '密林 🌴🌴🌴',
+          label: '🌴🌴🌴',
           color: '#2F5A32'
         })
       ];
@@ -622,7 +622,7 @@
           y: area.y + 250,
           w: 100,
           h: 50,
-          label: '捆好的原木',
+          label: '🪵🪢',
           color: '#6B4423',
           visible: false
         })
@@ -675,7 +675,7 @@
           y: area.y + area.h - 90,
           w: W - 80,
           h: 70,
-          label: '🌊 水在下方',
+          label: '🌊水在下方',
           color: '#3A7A9A',
           textColor: '#fff'
         })
@@ -750,7 +750,16 @@
       if (/volume|mute/.test(id)) return EMOJI.volume;
       if (/hair/.test(id)) return '💇';
       if (/match/.test(id)) return EMOJI.match;
-      return id.length > 6 ? id.slice(0, 4) : id;
+      // 子串匹配 EMOJI 表（如 rock_face → 🪨）
+      var keys = Object.keys(EMOJI);
+      for (var ki = 0; ki < keys.length; ki++) {
+        if (keys[ki].length >= 3 && id.indexOf(keys[ki]) >= 0 && !/[\u4e00-\u9fa5]/.test(EMOJI[keys[ki]])) return EMOJI[keys[ki]];
+      }
+      if (/face|happ/.test(id)) return '🙂';
+      if (/arrow|edge/.test(id)) return '⬇️';
+      if (/towel/.test(id)) return '🧻';
+      if (/^[A-Z]{1,3}$/.test(id) || /^\d+$/.test(id)) return id;
+      return '❓';
     }
 
     var collected = [];
@@ -774,6 +783,7 @@
       }
       if (typeof v === 'object') {
         Object.keys(v).forEach(function (k) {
+          if (k === 'action' || k === 'orientation') return; // 动作名不是实体
           walk(v[k]);
         });
       }
@@ -890,13 +900,13 @@
       if (/^answer_/.test(id)) label = id.replace('answer_', '');
       if (id === 'volume_icon') label = '🔊';
       if (id === 'char_重') label = '重';
-      if (id === 'puzzle_board') label = '地图框';
+      if (id === 'puzzle_board') label = '🗺️';
       if (/^piece_/.test(id)) label = '🧩' + id.slice(6);
       if (/^diff_/.test(id)) label = '❗';
       if (/^star_/.test(id)) label = '⭐';
       if (/^coin_/.test(id)) label = '🪙';
       if (id === 'progress_knob') label = '⏳';
-      if (id === 'rating_bar') label = '☆☆☆☆☆';
+      if (id === 'rating_bar') label = '评价栏';
 
       addId(id, i, {
         draggable: drag,
@@ -919,14 +929,41 @@
   var SceneBuild = {};
 
   SceneBuild.build = function (level, W, H) {
-    var top = 130;
-    var bottom = 120;
+    var L = Game.Theme && Game.Theme.layout;
+    var top = L ? L.areaTop : 130;
+    var bottom = L ? H - L.bottomBarY + 12 : 120;
     var area = { x: 16, y: top, w: W - 32, h: H - top - bottom };
     var ents;
     if (HAND[level.id]) {
       ents = HAND[level.id](W, H, area);
     } else {
       ents = genericFromWin(level, W, H, area);
+    }
+    // 把地面物体整体下移到沙滩「舞台」上（保持相对位置，命中框同步）；
+    // 天空物体（太阳/云/鸟…）留在天上，除非与地面物体有遮挡关系
+    if (L && L.stageTop && ents.length) {
+      var sky = [], ground = [];
+      ents.forEach(function (e) {
+        (SceneBuild.styleOf(e) === 'sky' ? sky : ground).push(e);
+      });
+      var tangled = sky.some(function (a) {
+        return ground.some(function (b) {
+          return overlap(a, b, 0);
+        });
+      });
+      var moving = tangled || !ground.length ? ents : ground;
+      var minY = 1e9, maxY = -1e9;
+      moving.forEach(function (e) {
+        minY = Math.min(minY, e.y);
+        maxY = Math.max(maxY, e.y + e.h);
+      });
+      var dy = Math.min(L.stageTop - minY, area.y + area.h - 8 - maxY);
+      if (dy > 0) {
+        moving.forEach(function (e) {
+          e.y += dy;
+          e.oy = e.y;
+        });
+      }
     }
     return {
       area: area,
@@ -946,18 +983,90 @@
     };
   };
 
+  var SKY_RE = /sun|moon|cloud|star|bird|balloon|rain|parrot|owl|fly|alien|ufo/;
+  var ENV_RE = /tree|forest|rock|stone|fire|camp|puddle|water|sand|mound|tent|person|character|grandpa|cow|wolf|sheep|dog|hole|road|pile|boat|zone|gap|bridge|monster|giraffe|cage/;
+  var GLOW_RE = /sun|moon|star/;
+
+  /** 按 id 推断物体风格：sky（无落地影）/ env（环境大物件）/ prop（道具）/ answer（数字选项） */
+  SceneBuild.styleOf = function (e) {
+    if (e._style) return e._style;
+    var id = String(e.id || '');
+    var st = 'prop';
+    if (/^answer_/.test(id)) st = 'answer';
+    else if (SKY_RE.test(id)) st = 'sky';
+    else if (ENV_RE.test(id)) st = 'env';
+    e._style = st;
+    return st;
+  };
+
+  function groundShadow(ctx, cx, y, rx) {
+    ctx.save();
+    ctx.translate(cx, y);
+    ctx.scale(1, 0.26);
+    var g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx);
+    g.addColorStop(0, 'rgba(110,70,30,0.42)');
+    g.addColorStop(1, 'rgba(110,70,30,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** 白边贴纸 + 落地阴影；纯文字 label 用纸牌/选项按钮 */
   SceneBuild.drawEntity = function (ctx, e) {
     if (!e.visible) return;
+    var UI = Game.UI, T = Game.Theme, EM = Game.Emoji;
+    var st = SceneBuild.styleOf(e);
+    var parts = EM.split(e.label);
+    var emojis = [], text = parts.text;
+    for (var i = 0; i < parts.emojis.length; i++) {
+      if (!EM.ready || EM.has(parts.emojis[i])) emojis.push(parts.emojis[i]);
+      else text = parts.emojis[i] + text;
+    }
+    var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
     ctx.save();
-    ctx.fillStyle = e.color;
-    Game.UI.roundRect(ctx, e.x, e.y, e.w, e.h, 10);
-    ctx.fill();
-    ctx.fillStyle = e.textColor || '#2A241C';
-    var fontSize = Math.min(22, Math.floor(e.w / 2.2));
-    ctx.font = fontSize + 'px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(e.label, e.x + e.w / 2, e.y + e.h / 2);
+    if (!emojis.length) {
+      // 纯文字物体
+      if (st === 'answer') {
+        UI.drawButton(ctx, { x: e.x, y: e.y, w: e.w, h: e.h - 6, label: text || '?', kind: 'primary', r: 16 }, false);
+      } else {
+        UI.cached(ctx, 'tile|' + Math.round(e.w) + 'x' + Math.round(e.h), e.x, e.y, e.w, e.h, function (c) {
+          UI.glossBody(c, e.w, e.h - 5, '#FFF4DA', { r: 14, d: 5 });
+        });
+        var custom = e.textColor && e.textColor !== '#2A241C' && e.textColor !== '#fff';
+        var col = custom ? e.textColor : (e.color && /^#/.test(e.color) && /^c_/.test(e.id) ? e.color : T.INK);
+        var size = UI.fitSize(ctx, text, e.w - 14, Math.min(26, Math.round(e.h * 0.42)), T.display, 10);
+        ctx.font = T.display(size);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = col;
+        ctx.fillText(text, cx, cy - 2);
+      }
+      ctx.restore();
+      return;
+    }
+    var n = emojis.length;
+    var s = Math.min(e.h * 0.95, (e.w * 1.0) / n);
+    if (n === 1) {
+      var mn = Math.min(e.w, e.h), mx = Math.max(e.w, e.h);
+      s = st === 'env' ? Math.min(mx * 0.95, mn * 1.3) : mn * 1.08;
+    }
+    if (st === 'sky') {
+      if (GLOW_RE.test(e.id)) {
+        var g = ctx.createRadialGradient(cx, cy, s * 0.2, cx, cy, s * 0.95);
+        g.addColorStop(0, 'rgba(255,240,170,0.7)');
+        g.addColorStop(1, 'rgba(255,240,170,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - s, cy - s, s * 2, s * 2);
+      }
+    } else {
+      groundShadow(ctx, cx, e.y + e.h - 2, Math.max(e.w * (st === 'env' ? 0.55 : 0.45), s * 0.5));
+    }
+    var startX = cx - (s * (n - 1)) / 2;
+    var ey = cy - (text ? 4 : 0);
+    for (var j = 0; j < n; j++) EM.draw(ctx, emojis[j], startX + j * s, ey, s * 0.86);
+    if (text) UI.tag(ctx, text, cx, e.y + e.h - 6, 11);
     ctx.restore();
   };
 
