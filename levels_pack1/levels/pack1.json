@@ -1,0 +1,1602 @@
+{
+  "game": "绝望岛求生记",
+  "version": "brain-teaser-iaa-v1",
+  "pack": 1,
+  "levelRange": [
+    21,
+    100
+  ],
+  "levels": [
+    {
+      "id": "lv_021",
+      "type": "drag_combine",
+      "title": "点燃火把",
+      "scene": "未点燃的火把和燃烧的篝火",
+      "hintSteps": [
+        "借个火",
+        "火把拖到篝火上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "torch",
+        "to": "campfire"
+      },
+      "failToast": "干木头点不着",
+      "winToast": "火把亮了，夜路不怕",
+      "shareHook": "以火生火，经典操作",
+      "sourceNote": "拖合并·借火"
+    },
+    {
+      "id": "lv_022",
+      "type": "tap_find",
+      "title": "找出所有笑脸",
+      "scene": "椰子、石头、云朵上藏着笑脸图案",
+      "hintSteps": [
+        "仔细找每个物件",
+        "一共有5个"
+      ],
+      "win": {
+        "action": "tap_all",
+        "targets": [
+          "coconut_face",
+          "rock_face",
+          "cloud_face",
+          "leaf_face",
+          "shell_face"
+        ],
+        "count": 5
+      },
+      "failToast": "还少几个呢",
+      "winToast": "五张笑脸，气氛到位",
+      "shareHook": "荒岛也要保持微笑",
+      "sourceNote": "找物·多目标收集"
+    },
+    {
+      "id": "lv_023",
+      "type": "unconventional",
+      "title": "把「一切」放进箱子",
+      "scene": "画面上有个空木箱，题干写着把一切放进去",
+      "hintSteps": [
+        "「一切」是个词",
+        "把题干里的「一切」拖进箱子"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "title_word:一切",
+        "to": "box"
+      },
+      "failToast": "东西太多装不下？",
+      "winToast": "字面意思：一切=那个词",
+      "shareHook": "文字游戏入门课",
+      "sourceNote": "反逻辑·拖题干文字"
+    },
+    {
+      "id": "lv_024",
+      "type": "tap_find",
+      "title": "找到最大的火堆",
+      "scene": "四个小火堆分散着",
+      "hintSteps": [
+        "把它们拖到一起",
+        "合并后点最大的"
+      ],
+      "win": {
+        "action": "drag_merge_then_tap",
+        "targets": "fires",
+        "mergeTo": "top_left_fire"
+      },
+      "failToast": "单独点哪个都不够大",
+      "winToast": "四火合一，这才叫大",
+      "shareHook": "团结就是力量",
+      "sourceNote": "找物·合并比大"
+    },
+    {
+      "id": "lv_025",
+      "type": "drag_combine",
+      "title": "让灯泡亮起来",
+      "scene": "没电的灯泡和天上的太阳",
+      "hintSteps": [
+        "太阳也是光源",
+        "把灯泡拖到太阳下"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "bulb",
+        "to": "sun"
+      },
+      "failToast": "找开关也没用",
+      "winToast": "借光成功！",
+      "shareHook": "荒岛光伏板",
+      "sourceNote": "拖合并·非常规供电"
+    },
+    {
+      "id": "lv_026",
+      "type": "unconventional",
+      "title": "数头发有几根",
+      "scene": "角色头顶几根乱发",
+      "hintSteps": [
+        "可以拖开头发",
+        "拖完再数"
+      ],
+      "win": {
+        "action": "drag_apart_then_answer",
+        "target": "hairs",
+        "answer": 3
+      },
+      "failToast": "粘在一起数不清",
+      "winToast": "三根，地中海预警",
+      "shareHook": "发型暴露年龄",
+      "sourceNote": "非常规·拖开再数"
+    },
+    {
+      "id": "lv_027",
+      "type": "tap_find",
+      "title": "抓到烦人的苍蝇",
+      "scene": "苍蝇飞来飞去，画面有眼镜和狗",
+      "hintSteps": [
+        "把眼镜戴到人脸上",
+        "放大后才能看见苍蝇"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "from": "glasses",
+        "to": "person",
+        "tap": "fly"
+      },
+      "failToast": "凭肉眼抓不到",
+      "winToast": "戴上眼镜，无处可逃",
+      "shareHook": "视力不够道具来凑",
+      "sourceNote": "找物·道具增强视野"
+    },
+    {
+      "id": "lv_028",
+      "type": "drag_combine",
+      "title": "救出被困的小鸡",
+      "scene": "小鸡在笼子里，旁边有钥匙和锁",
+      "hintSteps": [
+        "钥匙开锁",
+        "拖到锁上再点笼门"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "from": "key",
+        "to": "lock",
+        "then": "cage_door"
+      },
+      "failToast": "硬掰笼子打不开",
+      "winToast": "自由了，小鸡快跑",
+      "shareHook": "钥匙永远在旁边",
+      "sourceNote": "拖合并·开锁救人"
+    },
+    {
+      "id": "lv_029",
+      "type": "unconventional",
+      "title": "让雨停下来",
+      "scene": "乌云下着雨，淋湿了角色",
+      "hintSteps": [
+        "倒过来雨就「停」了",
+        "旋转手机180度"
+      ],
+      "win": {
+        "action": "device_rotate",
+        "orientation": "upside_down"
+      },
+      "failToast": "撑叶子也挡不住",
+      "winToast": "雨往上流，算停了吧",
+      "shareHook": "相对论式停雨",
+      "sourceNote": "非常规·旋转停雨"
+    },
+    {
+      "id": "lv_030",
+      "type": "tap_find",
+      "title": "找出六边形",
+      "scene": "一堆圆形三角形方形水果",
+      "hintSteps": [
+        "别被形状骗了",
+        "注意题干下的小图标"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "hexagon_icon"
+      },
+      "failToast": "水果里没有六边形",
+      "winToast": "UI里藏着六边形",
+      "shareHook": "出题人最阴的一集",
+      "sourceNote": "找物·UI元素"
+    },
+    {
+      "id": "lv_031",
+      "type": "drag_combine",
+      "title": "把蛋糕分成两半",
+      "scene": "完整蛋糕和一把刀",
+      "hintSteps": [
+        "刀可以切",
+        "拖到蛋糕中间"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "knife",
+        "to": "cake_center"
+      },
+      "failToast": "徒手撕？太狠了",
+      "winToast": "一切两半，公平",
+      "shareHook": "荒岛也要过生日",
+      "sourceNote": "拖合并·切割"
+    },
+    {
+      "id": "lv_032",
+      "type": "unconventional",
+      "title": "什么都别做",
+      "scene": "题干写着：坚持15秒什么都别点",
+      "hintSteps": [
+        "真的什么都别点",
+        "等进度条走完"
+      ],
+      "win": {
+        "action": "wait",
+        "durationMs": 15000
+      },
+      "failToast": "手痒点了就重来",
+      "winToast": "耐心也是一种通关",
+      "shareHook": "最难的关：忍住",
+      "sourceNote": "非常规·静等"
+    },
+    {
+      "id": "lv_033",
+      "type": "tap_find",
+      "title": "找到藏起来的星星",
+      "scene": "夜空有云，星星被挡住",
+      "hintSteps": [
+        "拨开云朵",
+        "点出5颗星"
+      ],
+      "win": {
+        "action": "drag_then_tap_all",
+        "move": "clouds",
+        "targets": "stars",
+        "count": 5
+      },
+      "failToast": "云太多了",
+      "winToast": "五星齐亮，许个愿",
+      "shareHook": "拨云见星",
+      "sourceNote": "找物·移云找星"
+    },
+    {
+      "id": "lv_034",
+      "type": "drag_combine",
+      "title": "给猫咪洗澡",
+      "scene": "脏兮兮的猫和一盆水",
+      "hintSteps": [
+        "把猫拖进水盆",
+        "或把水盆拖到猫上"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "cat",
+        "to": "water_basin"
+      },
+      "failToast": "猫会反抗的……",
+      "winToast": "洗完香喷喷",
+      "shareHook": "猫：我不干了",
+      "sourceNote": "拖合并·清洗"
+    },
+    {
+      "id": "lv_035",
+      "type": "unconventional",
+      "title": "找到绿色",
+      "scene": "画面全是灰棕色荒岛色",
+      "hintSteps": [
+        "系统UI有没有绿色？",
+        "点提示按钮旁的绿点"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "ui_green_dot"
+      },
+      "failToast": "岛上没有绿叶？",
+      "winToast": "绿色在按钮上！",
+      "shareHook": "出题人把答案放UI里",
+      "sourceNote": "反逻辑·点UI"
+    },
+    {
+      "id": "lv_036",
+      "type": "tap_find",
+      "title": "找出被咬过的西瓜",
+      "scene": "几块西瓜片，有一块边角被咬",
+      "hintSteps": [
+        "滑动每一块",
+        "露出缺口的那块"
+      ],
+      "win": {
+        "action": "drag_reveal_then_tap",
+        "targets": "watermelon_slices",
+        "tap": "bitten_one"
+      },
+      "failToast": "看起来都一样",
+      "winToast": "就是这块！",
+      "shareHook": "咬痕出卖一切",
+      "sourceNote": "找茬·滑动揭示"
+    },
+    {
+      "id": "lv_037",
+      "type": "drag_combine",
+      "title": "救出长颈鹿",
+      "scene": "长颈鹿头卡在树权里，旁边有锯子",
+      "hintSteps": [
+        "锯子锯开树权",
+        "拖锯子到卡住处"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "saw",
+        "to": "tree_fork"
+      },
+      "failToast": "硬拉会受伤",
+      "winToast": "树权断了，自由了",
+      "shareHook": "动物救援队上线",
+      "sourceNote": "拖合并·工具救援"
+    },
+    {
+      "id": "lv_038",
+      "type": "unconventional",
+      "title": "让时钟停在12点",
+      "scene": "时钟停在6点",
+      "hintSteps": [
+        "倒过来6就是12",
+        "旋转手机"
+      ],
+      "win": {
+        "action": "device_rotate",
+        "orientation": "upside_down"
+      },
+      "failToast": "调指针没用",
+      "winToast": "倒过来，整点！",
+      "shareHook": "时间是相对的",
+      "sourceNote": "非常规·旋转时钟"
+    },
+    {
+      "id": "lv_039",
+      "type": "tap_find",
+      "title": "抓住所有的鸟",
+      "scene": "树上站着几只鸟，一碰就飞",
+      "hintSteps": [
+        "先把网拖过来",
+        "再点每只鸟"
+      ],
+      "win": {
+        "action": "drag_then_tap_all",
+        "from": "net",
+        "to": "tree",
+        "targets": "birds"
+      },
+      "failToast": "手太慢了",
+      "winToast": "一网打尽！",
+      "shareHook": "捕鸟达人",
+      "sourceNote": "找物·道具+多点"
+    },
+    {
+      "id": "lv_040",
+      "type": "drag_combine",
+      "title": "制作冰淇淋",
+      "scene": "牛奶、冰块和空蛋筒",
+      "hintSteps": [
+        "先把牛奶和冰块合",
+        "再倒进蛋筒"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "milk",
+            "to": "ice"
+          },
+          {
+            "from": "mix",
+            "to": "cone"
+          }
+        ]
+      },
+      "failToast": "融化了重来",
+      "winToast": "荒岛甜品店开张",
+      "shareHook": "谁说荒岛没甜品",
+      "sourceNote": "拖合并·多料合成"
+    },
+    {
+      "id": "lv_041",
+      "type": "unconventional",
+      "title": "放大找母鸡",
+      "scene": "画面只有一颗鸡蛋",
+      "hintSteps": [
+        "双指捏合缩小画面",
+        "边缘有只母鸡"
+      ],
+      "win": {
+        "action": "pinch_zoom_out",
+        "then_tap": "hen"
+      },
+      "failToast": "鸡蛋不会下鸡",
+      "winToast": "鸡在画外！",
+      "shareHook": "缩小才看见大局",
+      "sourceNote": "非常规·双指缩放"
+    },
+    {
+      "id": "lv_042",
+      "type": "tap_find",
+      "title": "找到数字8",
+      "scene": "一堆数字贴纸：6、9、0、3",
+      "hintSteps": [
+        "把6倒过来",
+        "或找题干里的lv编号"
+      ],
+      "win": {
+        "action": "device_rotate_or_tap",
+        "alt": [
+          "rotate_six",
+          "tap_level_number_if_8"
+        ]
+      },
+      "failToast": "贴纸里没有8",
+      "winToast": "倒过来就有了 / 关卡号也是线索",
+      "shareHook": "数字可以翻转",
+      "sourceNote": "找物·旋转数字"
+    },
+    {
+      "id": "lv_043",
+      "type": "drag_combine",
+      "title": "把大的放进小的",
+      "scene": "一个大箱子和一个小盒子",
+      "hintSteps": [
+        "先缩小大箱子",
+        "双指捏合后再拖进去"
+      ],
+      "win": {
+        "action": "pinch_then_drag",
+        "target": "big_box",
+        "to": "small_box"
+      },
+      "failToast": "物理上不可能？",
+      "winToast": "缩小后就能装了",
+      "shareHook": "游戏里没有不可能",
+      "sourceNote": "拖合并·缩放后放入"
+    },
+    {
+      "id": "lv_044",
+      "type": "unconventional",
+      "title": "找到心形",
+      "scene": "画面是各种几何图形",
+      "hintSteps": [
+        "把两个半圆拖到一起",
+        "或点题干爱心符号"
+      ],
+      "win": {
+        "action": "drag_combine_or_tap",
+        "from": "semicircle_a",
+        "to": "semicircle_b"
+      },
+      "failToast": "没有现成的心",
+      "winToast": "拼出来也算！",
+      "shareHook": "爱心是拼出来的",
+      "sourceNote": "非常规·拼接成形"
+    },
+    {
+      "id": "lv_045",
+      "type": "tap_find",
+      "title": "帮爷爷找眼镜",
+      "scene": "老人坐着，桌上没有眼镜",
+      "hintSteps": [
+        "眼镜可能戴着",
+        "点他头顶"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "grandpa_forehead"
+      },
+      "failToast": "桌抽屉翻遍了",
+      "winToast": "一直戴在头上啊！",
+      "shareHook": "经典找眼镜现场",
+      "sourceNote": "找物·意料之外位置"
+    },
+    {
+      "id": "lv_046",
+      "type": "drag_combine",
+      "title": "堵住漏洞船",
+      "scene": "小船船底有洞，旁边有木塞和布",
+      "hintSteps": [
+        "先塞木塞",
+        "再盖布加固"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "cork",
+            "to": "hole"
+          },
+          {
+            "from": "cloth",
+            "to": "cork"
+          }
+        ]
+      },
+      "failToast": "一直漏水……",
+      "winToast": "堵住了，可以出海",
+      "shareHook": "补锅匠上线",
+      "sourceNote": "拖合并·修补漏船"
+    },
+    {
+      "id": "lv_047",
+      "type": "unconventional",
+      "title": "让蜡烛重新点燃",
+      "scene": "熄灭的蜡烛，没有火柴",
+      "hintSteps": [
+        "提高屏幕亮度？或把蜡烛拖到太阳下",
+        "拖到太阳旁"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "candle",
+        "to": "sun"
+      },
+      "failToast": "吹气没用",
+      "winToast": "借光复燃！",
+      "shareHook": "太阳牌打火机",
+      "sourceNote": "非常规·借日光"
+    },
+    {
+      "id": "lv_048",
+      "type": "tap_find",
+      "title": "找出两处不同",
+      "scene": "左右两张几乎一样的海滩图",
+      "hintSteps": [
+        "移开遮挡物再比",
+        "桌下/云后可能有差异"
+      ],
+      "win": {
+        "action": "drag_reveal_then_tap_diffs",
+        "count": 2
+      },
+      "failToast": "一模一样啊",
+      "winToast": "找到了两处！",
+      "shareHook": "找茬要耐心",
+      "sourceNote": "找茬·移开再比"
+    },
+    {
+      "id": "lv_049",
+      "type": "drag_combine",
+      "title": "给兔子吃胡萝卜",
+      "scene": "兔子在笼子外，胡萝卜在桌上",
+      "hintSteps": [
+        "把胡萝卜拖给兔子",
+        "注意别拖到笼子里空处"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "carrot",
+        "to": "rabbit"
+      },
+      "failToast": "它够不到",
+      "winToast": "嚼得真香",
+      "shareHook": "投喂成功",
+      "sourceNote": "拖合并·喂食"
+    },
+    {
+      "id": "lv_050",
+      "type": "unconventional",
+      "title": "征服怪物",
+      "scene": "一只大怪物挡路，打不过",
+      "hintSteps": [
+        "把题干「怪物」拖走",
+        "或拖出屏幕"
+      ],
+      "win": {
+        "action": "drag_offscreen",
+        "target": "title_word:怪物"
+      },
+      "failToast": "硬刚会输",
+      "winToast": "文字怪物被拖走了",
+      "shareHook": "降维打击：拖字",
+      "sourceNote": "反逻辑·拖走威胁"
+    },
+    {
+      "id": "lv_051",
+      "type": "tap_find",
+      "title": "收集散落的硬币",
+      "scene": "沙滩上埋着几枚硬币，部分被沙盖住",
+      "hintSteps": [
+        "扫开沙子",
+        "点到5枚"
+      ],
+      "win": {
+        "action": "swipe_reveal_then_tap",
+        "count": 5
+      },
+      "failToast": "还少几枚",
+      "winToast": "五枚硬币，小财神",
+      "shareHook": "荒岛淘金",
+      "sourceNote": "找物·扫沙收集"
+    },
+    {
+      "id": "lv_052",
+      "type": "drag_combine",
+      "title": "打开宝箱",
+      "scene": "上锁宝箱，钥匙在鱼肚子旁的钩上",
+      "hintSteps": [
+        "先拿钥匙",
+        "再拖到宝箱锁上"
+      ],
+      "win": {
+        "action": "tap_then_drag",
+        "pick": "key_on_hook",
+        "to": "chest_lock"
+      },
+      "failToast": "砸不开的",
+      "winToast": "宝箱开了！",
+      "shareHook": "钥匙从来不远",
+      "sourceNote": "拖合并·取钥开箱"
+    },
+    {
+      "id": "lv_053",
+      "type": "unconventional",
+      "title": "让冰箱顶的蛋糕够得到",
+      "scene": "蛋糕在高处，角色够不着",
+      "hintSteps": [
+        "打开冰箱门当垫高",
+        "或把下层东西拿掉让高度降"
+      ],
+      "win": {
+        "action": "tap_then_reach",
+        "open": "fridge_door",
+        "then_tap": "cake"
+      },
+      "failToast": "跳也够不着",
+      "winToast": "借门一用，够到了",
+      "shareHook": "冰箱门垫脚石",
+      "sourceNote": "非常规·改变高度"
+    },
+    {
+      "id": "lv_054",
+      "type": "tap_find",
+      "title": "找到外星人",
+      "scene": "正常海滩场景，有个伪装成石头的家伙",
+      "hintSteps": [
+        "拖开可疑石头",
+        "点发光的眼睛"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "move": "fake_rock",
+        "tap": "alien"
+      },
+      "failToast": "没有飞碟啊",
+      "winToast": "就藏在眼皮底下",
+      "shareHook": "荒岛也有外星人",
+      "sourceNote": "找物·伪装揭示"
+    },
+    {
+      "id": "lv_055",
+      "type": "drag_combine",
+      "title": "挤牛奶",
+      "scene": "奶牛站着，旁边有空桶",
+      "hintSteps": [
+        "把桶放到奶牛下方",
+        "再点奶牛"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "from": "bucket",
+        "to": "under_cow",
+        "then": "cow"
+      },
+      "failToast": "桶放错位置了",
+      "winToast": "鲜奶到手",
+      "shareHook": "牧场主技能",
+      "sourceNote": "拖合并·定位+操作"
+    },
+    {
+      "id": "lv_056",
+      "type": "unconventional",
+      "title": "把三角形颠倒",
+      "scene": "一个正立的三角形",
+      "hintSteps": [
+        "旋转手机",
+        "或双指旋转图形"
+      ],
+      "win": {
+        "action": "pinch_rotate",
+        "target": "triangle",
+        "degrees": 180
+      },
+      "failToast": "翻转按钮在哪？",
+      "winToast": "倒过来了！",
+      "shareHook": "三角形也会翻跟头",
+      "sourceNote": "非常规·旋转图形"
+    },
+    {
+      "id": "lv_057",
+      "type": "tap_find",
+      "title": "找到乒乓球",
+      "scene": "杂乱桌面，球可能在杯子下",
+      "hintSteps": [
+        "掀开杯子",
+        "点白球"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "move": "cup",
+        "tap": "pingpong"
+      },
+      "failToast": "桌布翻遍了",
+      "winToast": "就在杯子下面",
+      "shareHook": "经典藏球术",
+      "sourceNote": "找物·容器下藏物"
+    },
+    {
+      "id": "lv_058",
+      "type": "drag_combine",
+      "title": "抓小偷",
+      "scene": "小偷站在洞边，旁边有铲子和稻草",
+      "hintSteps": [
+        "用铲子挖到他前面",
+        "稻草盖住洞口"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "shovel",
+            "to": "front_of_thief"
+          },
+          {
+            "from": "straw",
+            "to": "hole"
+          }
+        ]
+      },
+      "failToast": "直接抓会被跑",
+      "winToast": "坑已备好，抓到了！",
+      "shareHook": "机关抓贼",
+      "sourceNote": "拖合并·多道具陷阱"
+    },
+    {
+      "id": "lv_059",
+      "type": "unconventional",
+      "title": "2+2=？",
+      "scene": "显示算式 2+2=？",
+      "hintSteps": [
+        "把两个2拖到一起变成22",
+        "或点出非常规答案"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "digit_2a",
+        "to": "digit_2b",
+        "result": "22"
+      },
+      "failToast": "等于4太普通了",
+      "winToast": "22也是一种答案",
+      "shareHook": "数学老师会哭",
+      "sourceNote": "反逻辑·拼接数字"
+    },
+    {
+      "id": "lv_060",
+      "type": "tap_find",
+      "title": "找到合适的配对物",
+      "scene": "左边一把钥匙，右边若干物体",
+      "hintSteps": [
+        "找能开锁的",
+        "点锁或配对的锁孔"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "matching_lock"
+      },
+      "failToast": "配对错了",
+      "winToast": "钥匙配锁，完美",
+      "shareHook": "配对小测验",
+      "sourceNote": "找物·逻辑配对"
+    },
+    {
+      "id": "lv_061",
+      "type": "drag_combine",
+      "title": "让小鸭喝到水",
+      "scene": "小鸭在岸上，水在远处低洼",
+      "hintSteps": [
+        "把水洼拖近",
+        "或把小鸭拖到水边"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "duck",
+        "to": "water"
+      },
+      "failToast": "它不会飞过来",
+      "winToast": "咕咚，喝饱了",
+      "shareHook": "鸭鸭冲鸭",
+      "sourceNote": "拖合并·靠近水源"
+    },
+    {
+      "id": "lv_062",
+      "type": "unconventional",
+      "title": "消灭怪物（第二招）",
+      "scene": "怪物血条很厚",
+      "hintSteps": [
+        "把屏幕亮度调低？或长按怪物直到消失",
+        "长按3秒"
+      ],
+      "win": {
+        "action": "long_press",
+        "target": "monster",
+        "durationMs": 3000
+      },
+      "failToast": "普攻没用",
+      "winToast": "长按消除！",
+      "shareHook": "扣血不如扣存在",
+      "sourceNote": "非常规·长按消除"
+    },
+    {
+      "id": "lv_063",
+      "type": "tap_find",
+      "title": "找出所有不同点",
+      "scene": "两张荒岛小屋对比图",
+      "hintSteps": [
+        "共3处：窗户、烟囱、椰子数",
+        "逐一点出"
+      ],
+      "win": {
+        "action": "tap_all_diffs",
+        "count": 3
+      },
+      "failToast": "还少一处",
+      "winToast": "三处全中！",
+      "shareHook": "火眼金睛",
+      "sourceNote": "找茬·多差异"
+    },
+    {
+      "id": "lv_064",
+      "type": "drag_combine",
+      "title": "营救落水者",
+      "scene": "有人在水里挥手，岸边有绳子和木板",
+      "hintSteps": [
+        "绳子拖到落水者",
+        "或木板拖过去当浮板"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "rope",
+        "to": "drowning_person"
+      },
+      "failToast": "跳下去一起沉",
+      "winToast": "拉上来了！",
+      "shareHook": "及时救援",
+      "sourceNote": "拖合并·救援"
+    },
+    {
+      "id": "lv_065",
+      "type": "unconventional",
+      "title": "找到题干里的答案",
+      "scene": "问：最小的数字是几？画面有大号92、58",
+      "hintSteps": [
+        "题干「几」旁边可能有小数",
+        "或点关卡号"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "tiny_digit_in_title"
+      },
+      "failToast": "92和58都不小",
+      "winToast": "藏在题干里的才最小",
+      "shareHook": "字号陷阱",
+      "sourceNote": "反逻辑·题干藏答案"
+    },
+    {
+      "id": "lv_066",
+      "type": "tap_find",
+      "title": "叫醒猫头鹰",
+      "scene": "白天猫头鹰在睡觉",
+      "hintSteps": [
+        "把太阳拖走变黑夜",
+        "再点猫头鹰"
+      ],
+      "win": {
+        "action": "drag_offscreen_then_tap",
+        "move": "sun",
+        "tap": "owl"
+      },
+      "failToast": "白天叫不醒",
+      "winToast": "天黑了，它醒了",
+      "shareHook": "作息反着来",
+      "sourceNote": "找物·改变环境再点"
+    },
+    {
+      "id": "lv_067",
+      "type": "drag_combine",
+      "title": "把3个苹果分给6个人",
+      "scene": "3个苹果，6个火柴人",
+      "hintSteps": [
+        "切开苹果",
+        "或把「苹果」文字拖给每人"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "knife",
+        "to": "apples",
+        "then_distribute": true
+      },
+      "failToast": "一人半个才对",
+      "winToast": "切开就能分了",
+      "shareHook": "公平分配",
+      "sourceNote": "拖合并·切割分配"
+    },
+    {
+      "id": "lv_068",
+      "type": "unconventional",
+      "title": "让风扇转起来",
+      "scene": "风扇没插电，旁边有插座和冰块",
+      "hintSteps": [
+        "插上插座",
+        "可选：冰块放风扇后加速「降温剧情」"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "plug",
+        "to": "outlet"
+      },
+      "failToast": "干转没用",
+      "winToast": "通电了，呼呼转",
+      "shareHook": "插电基本法",
+      "sourceNote": "非常规·插电启动"
+    },
+    {
+      "id": "lv_069",
+      "type": "tap_find",
+      "title": "找到生鸡蛋",
+      "scene": "一排鸡蛋，要找生的",
+      "hintSteps": [
+        "拖动碰撞或摇一摇看反应",
+        "不会碎成固体的是生的？或砸开看"
+      ],
+      "win": {
+        "action": "drag_crack_then_tap",
+        "targets": "eggs",
+        "tap": "raw_egg"
+      },
+      "failToast": "看起来都一样",
+      "winToast": "这颗是生的",
+      "shareHook": "厨房实验",
+      "sourceNote": "找物·破坏检测"
+    },
+    {
+      "id": "lv_070",
+      "type": "drag_combine",
+      "title": "堆雪人（沙人）",
+      "scene": "三团大小不同的沙球",
+      "hintSteps": [
+        "从大到小叠起来",
+        "大→中→小"
+      ],
+      "win": {
+        "action": "drag_stack",
+        "order": [
+          "large_ball",
+          "mid_ball",
+          "small_ball"
+        ]
+      },
+      "failToast": "顺序错了会倒",
+      "winToast": "沙人矗立！",
+      "shareHook": "荒岛版雪人",
+      "sourceNote": "拖合并·按序堆叠"
+    },
+    {
+      "id": "lv_071",
+      "type": "unconventional",
+      "title": "把「重」的变轻",
+      "scene": "一块写着「重」的石头搬不动",
+      "hintSteps": [
+        "擦掉或拖走「重」字",
+        "石头就能拖了"
+      ],
+      "win": {
+        "action": "drag_off",
+        "target": "char_重",
+        "then_drag": "stone"
+      },
+      "failToast": "搬不动啊",
+      "winToast": "去字就轻了",
+      "shareHook": "文字魔法",
+      "sourceNote": "反逻辑·改文字属性"
+    },
+    {
+      "id": "lv_072",
+      "type": "tap_find",
+      "title": "找到隐藏关卡入口",
+      "scene": "普通场景，角落有个小箭头",
+      "hintSteps": [
+        "点屏幕边缘",
+        "或点返回箭头反向"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "edge_arrow"
+      },
+      "failToast": "正门进不去",
+      "winToast": "侧门发现了",
+      "shareHook": "隐藏入口党狂喜",
+      "sourceNote": "找物·边缘UI"
+    },
+    {
+      "id": "lv_073",
+      "type": "drag_combine",
+      "title": "组装望远镜",
+      "scene": "两个镜片和一段空心竹管",
+      "hintSteps": [
+        "镜片分别拖到竹管两端"
+      ],
+      "win": {
+        "action": "drag_all",
+        "items": [
+          "lens_a",
+          "lens_b"
+        ],
+        "to": "bamboo_tube"
+      },
+      "failToast": "缺零件",
+      "winToast": "望远组装完成，能看远了",
+      "shareHook": "手工光学",
+      "sourceNote": "拖合并·组装"
+    },
+    {
+      "id": "lv_074",
+      "type": "unconventional",
+      "title": "让声音消失",
+      "scene": "鹦鹉还在吵，题干提示「安静」",
+      "hintSteps": [
+        "静音手机",
+        "或点音量图标拖到最低"
+      ],
+      "win": {
+        "action": "mute_or_volume_down"
+      },
+      "failToast": "捂嘴没用",
+      "winToast": "世界安静了",
+      "shareHook": "系统静音也是解法",
+      "sourceNote": "非常规·设备静音"
+    },
+    {
+      "id": "lv_075",
+      "type": "tap_find",
+      "title": "找出最大的数字",
+      "scene": "卡片上写着 9、98、9.9、999但被折叠",
+      "hintSteps": [
+        "展开折叠的卡片",
+        "或把小数点拖走"
+      ],
+      "win": {
+        "action": "drag_reveal_then_tap",
+        "move": "fold",
+        "tap": "biggest_num"
+      },
+      "failToast": "9.9看起来最大？",
+      "winToast": "展开后真相大白",
+      "shareHook": "折叠藏数",
+      "sourceNote": "找物·展开揭示"
+    },
+    {
+      "id": "lv_076",
+      "type": "drag_combine",
+      "title": "做简易钓竿",
+      "scene": "树枝、绳子、弯钩",
+      "hintSteps": [
+        "按顺序组装：枝+绳+钩"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "rope",
+            "to": "branch"
+          },
+          {
+            "from": "hook",
+            "to": "rope_end"
+          }
+        ]
+      },
+      "failToast": "缺步骤组不成",
+      "winToast": "钓竿好了，开钓！",
+      "shareHook": "钓鱼佬永不空军",
+      "sourceNote": "拖合并·三件组装"
+    },
+    {
+      "id": "lv_077",
+      "type": "unconventional",
+      "title": "点题过关",
+      "scene": "题干：「请点击这里过关」",
+      "hintSteps": [
+        "「这里」两个字可点",
+        "点它"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "title_word:这里"
+      },
+      "failToast": "点画面没反应",
+      "winToast": "听话，点「这里」",
+      "shareHook": "最直白的脑洞",
+      "sourceNote": "反逻辑·点指示词"
+    },
+    {
+      "id": "lv_078",
+      "type": "tap_find",
+      "title": "找到伪装成树叶的虫子",
+      "scene": "一片绿叶堆，有一片在动",
+      "hintSteps": [
+        "盯着微动的那片",
+        "点它"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "moving_leaf_bug"
+      },
+      "failToast": "静静的找不到",
+      "winToast": "抓到虫子了",
+      "shareHook": "拟态大师落网",
+      "sourceNote": "找物·动态目标"
+    },
+    {
+      "id": "lv_079",
+      "type": "drag_combine",
+      "title": "降温大作战",
+      "scene": "角色很热，有扇子、冰块、湿毛巾",
+      "hintSteps": [
+        "任选合理降温道具拖到角色上",
+        "完成3种降温动作"
+      ],
+      "win": {
+        "action": "drag_any_of",
+        "items": [
+          "fan",
+          "ice",
+          "wet_towel"
+        ],
+        "to": "character",
+        "need": 3
+      },
+      "failToast": "还是好热",
+      "winToast": "凉快了！",
+      "shareHook": "消暑套餐",
+      "sourceNote": "拖合并·多道具解热"
+    },
+    {
+      "id": "lv_080",
+      "type": "unconventional",
+      "title": "把月亮变成太阳",
+      "scene": "夜空挂着月亮",
+      "hintSteps": [
+        "把月亮拖走，或把「月」字改",
+        "拖月亮出屏后太阳出现"
+      ],
+      "win": {
+        "action": "drag_offscreen",
+        "target": "moon",
+        "reveal": "sun"
+      },
+      "failToast": "等天亮太慢",
+      "winToast": "日月切换成功",
+      "shareHook": "昼夜操控者",
+      "sourceNote": "非常规·拖走换环境"
+    },
+    {
+      "id": "lv_081",
+      "type": "tap_find",
+      "title": "数三角形有多少个",
+      "scene": "几何图形嵌套，含小三角",
+      "hintSteps": [
+        "别漏掉大的组合",
+        "答案是8"
+      ],
+      "win": {
+        "action": "input_or_tap_answer",
+        "answer": 8
+      },
+      "failToast": "数漏了",
+      "winToast": "8个，全中",
+      "shareHook": "几何课回忆杀",
+      "sourceNote": "找物·图形计数"
+    },
+    {
+      "id": "lv_082",
+      "type": "drag_combine",
+      "title": "修好断桥",
+      "scene": "桥断了两截，旁边有木板和钉子",
+      "hintSteps": [
+        "木板搭上去",
+        "钉子固定"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "plank",
+            "to": "gap"
+          },
+          {
+            "from": "nails",
+            "to": "plank"
+          }
+        ]
+      },
+      "failToast": "跳过去会掉",
+      "winToast": "桥修好了，继续前进",
+      "shareHook": "基建狂魔",
+      "sourceNote": "拖合并·修桥"
+    },
+    {
+      "id": "lv_083",
+      "type": "unconventional",
+      "title": "让汽车开到路牌",
+      "scene": "汽车被云朵和文字挡住路",
+      "hintSteps": [
+        "先拖走文字和云",
+        "再拖汽车到路牌"
+      ],
+      "win": {
+        "action": "clear_then_drag",
+        "clear": [
+          "title_overlay",
+          "clouds"
+        ],
+        "from": "car",
+        "to": "road_sign"
+      },
+      "failToast": "路被挡住了",
+      "winToast": "畅通无阻！",
+      "shareHook": "清障车思维",
+      "sourceNote": "非常规·清障再移动"
+    },
+    {
+      "id": "lv_084",
+      "type": "tap_find",
+      "title": "找到五颗星评价",
+      "scene": "空的评价栏，星星散落场景",
+      "hintSteps": [
+        "把星星拖回评价栏",
+        "或点满五星"
+      ],
+      "win": {
+        "action": "tap_or_drag_stars",
+        "count": 5,
+        "to": "rating_bar"
+      },
+      "failToast": "还没满星",
+      "winToast": "五星好评！",
+      "shareHook": "请给荒岛打分",
+      "sourceNote": "找物·收集填槽"
+    },
+    {
+      "id": "lv_085",
+      "type": "drag_combine",
+      "title": "炼出净水",
+      "scene": "浑水、滤布、空瓶、篝火",
+      "hintSteps": [
+        "滤布过滤后瓶装",
+        "再放到火旁煮沸示意"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "filter_cloth",
+            "to": "dirty_water"
+          },
+          {
+            "from": "filtered",
+            "to": "bottle"
+          },
+          {
+            "from": "bottle",
+            "to": "fire"
+          }
+        ]
+      },
+      "failToast": "直接喝会出问题（游戏不表现）",
+      "winToast": "净水完成，可以喝了",
+      "shareHook": "生存净化术",
+      "sourceNote": "拖合并·多步净化"
+    },
+    {
+      "id": "lv_086",
+      "type": "unconventional",
+      "title": "关卡自己过",
+      "scene": "题干：「让这一关自己通过」",
+      "hintSteps": [
+        "点右上角跳过？或把进度条拖满",
+        "拖进度条到100%"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "progress_knob",
+        "to": "progress_end"
+      },
+      "failToast": "正常玩过不了",
+      "winToast": "进度条被拖满了！",
+      "shareHook": "外挂式通关",
+      "sourceNote": "反逻辑·拖UI进度"
+    },
+    {
+      "id": "lv_087",
+      "type": "tap_find",
+      "title": "找出笑得最开心的",
+      "scene": "几个表情，有一个被手挡住",
+      "hintSteps": [
+        "挪开挡脸的手",
+        "点最开心的脸"
+      ],
+      "win": {
+        "action": "drag_then_tap",
+        "move": "hand",
+        "tap": "happiest_face"
+      },
+      "failToast": "挡着看不清",
+      "winToast": "这张最开心",
+      "shareHook": "遮脸杀",
+      "sourceNote": "找物·揭开再选"
+    },
+    {
+      "id": "lv_088",
+      "type": "drag_combine",
+      "title": "投喂篝火",
+      "scene": "火快灭了，旁边有木柴和纸",
+      "hintSteps": [
+        "木柴和纸拖进火堆"
+      ],
+      "win": {
+        "action": "drag_all",
+        "items": [
+          "wood",
+          "paper"
+        ],
+        "to": "dying_fire"
+      },
+      "failToast": "火要灭了",
+      "winToast": "火势重新旺起来",
+      "shareHook": "加柴工上岗",
+      "sourceNote": "拖合并·续火"
+    },
+    {
+      "id": "lv_089",
+      "type": "unconventional",
+      "title": "用三根火柴等于6",
+      "scene": "三根火柴摆着",
+      "hintSteps": [
+        "摆成罗马数字VI",
+        "或摆成「正」字缺一"
+      ],
+      "win": {
+        "action": "drag_arrange",
+        "result": "VI"
+      },
+      "failToast": "1+1+1≠6？",
+      "winToast": "VI！罗马数字妙啊",
+      "shareHook": "数学课外知识",
+      "sourceNote": "非常规·摆字谜"
+    },
+    {
+      "id": "lv_090",
+      "type": "tap_find",
+      "title": "找到正确的影子",
+      "scene": "人站着，多个影子选项",
+      "hintSteps": [
+        "对应光源方向",
+        "点匹配的影子"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "correct_shadow"
+      },
+      "failToast": "影子选错了",
+      "winToast": "光影正确！",
+      "shareHook": "观察力测试",
+      "sourceNote": "找物·光影匹配"
+    },
+    {
+      "id": "lv_091",
+      "type": "drag_combine",
+      "title": "把狼拖走救小鸭",
+      "scene": "狼盯着小鸭",
+      "hintSteps": [
+        "不用打败狼",
+        "直接把狼拖出屏幕"
+      ],
+      "win": {
+        "action": "drag_offscreen",
+        "target": "wolf"
+      },
+      "failToast": "打不过狼",
+      "winToast": "威胁消失，小鸭安全",
+      "shareHook": "移出游戏世界也行",
+      "sourceNote": "拖合并·拖走威胁"
+    },
+    {
+      "id": "lv_092",
+      "type": "unconventional",
+      "title": "双指点破气球",
+      "scene": "一个大气球，单击没反应",
+      "hintSteps": [
+        "用两根手指同时点",
+        "或捏合扎破"
+      ],
+      "win": {
+        "action": "two_finger_tap",
+        "target": "balloon"
+      },
+      "failToast": "单指点不动",
+      "winToast": "砰！破了",
+      "shareHook": "双指操作教学",
+      "sourceNote": "非常规·双指点击"
+    },
+    {
+      "id": "lv_093",
+      "type": "tap_find",
+      "title": "按顺序点水果再点形状",
+      "scene": "苹果香蕉，以及六边形圆形方形",
+      "hintSteps": [
+        "严格按题干顺序点",
+        "水果从左到右，再形状"
+      ],
+      "win": {
+        "action": "tap_sequence",
+        "order": [
+          "apple",
+          "banana",
+          "hexagon",
+          "circle",
+          "square"
+        ]
+      },
+      "failToast": "顺序错了重来",
+      "winToast": "顺序大师！",
+      "shareHook": "听题指挥",
+      "sourceNote": "找物·顺序点击"
+    },
+    {
+      "id": "lv_094",
+      "type": "drag_combine",
+      "title": "拼出完整地图",
+      "scene": "地图碎成4块",
+      "hintSteps": [
+        "拖到正确位置拼好"
+      ],
+      "win": {
+        "action": "drag_puzzle",
+        "pieces": 4
+      },
+      "failToast": "还缺一块没归位",
+      "winToast": "藏宝图完成！",
+      "shareHook": "拼图小能手",
+      "sourceNote": "拖合并·拼图"
+    },
+    {
+      "id": "lv_095",
+      "type": "unconventional",
+      "title": "长按提示三秒",
+      "scene": "普通关卡怎么都过不了",
+      "hintSteps": [
+        "长按提示按钮三秒",
+        "触发隐藏通关"
+      ],
+      "win": {
+        "action": "long_press",
+        "target": "hint_button",
+        "durationMs": 3000
+      },
+      "failToast": "普通点提示没用",
+      "winToast": "隐藏彩蛋触发！",
+      "shareHook": "提示按钮的秘密",
+      "sourceNote": "非常规·长按UI"
+    },
+    {
+      "id": "lv_096",
+      "type": "tap_find",
+      "title": "找出唯一向下的箭头",
+      "scene": "一堆箭头朝各个方向",
+      "hintSteps": [
+        "仔细找朝下的",
+        "可能藏在边角"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "down_arrow"
+      },
+      "failToast": "眼花了",
+      "winToast": "找到了朝下的！",
+      "shareHook": "方向敏感度测试",
+      "sourceNote": "找物·方向异常"
+    },
+    {
+      "id": "lv_097",
+      "type": "drag_combine",
+      "title": "用磁铁吸钥匙",
+      "scene": "钥匙掉进缝里，够不着，旁边有磁铁",
+      "hintSteps": [
+        "磁铁拖到缝上方",
+        "吸起钥匙"
+      ],
+      "win": {
+        "action": "drag",
+        "from": "magnet",
+        "to": "crack_with_key"
+      },
+      "failToast": "手伸不进去",
+      "winToast": "吸上来了！",
+      "shareHook": "物理小实验",
+      "sourceNote": "拖合并·磁吸"
+    },
+    {
+      "id": "lv_098",
+      "type": "unconventional",
+      "title": "把关卡号变成答案",
+      "scene": "问：答案是几？选项乱七八糟",
+      "hintSteps": [
+        "当前是第98关",
+        "输入或点98"
+      ],
+      "win": {
+        "action": "tap_or_input",
+        "answer": 98
+      },
+      "failToast": "选项里没有对的",
+      "winToast": "关卡号就是答案",
+      "shareHook": "元游戏玩法",
+      "sourceNote": "反逻辑·用关卡号"
+    },
+    {
+      "id": "lv_099",
+      "type": "tap_find",
+      "title": "最后的椰子在哪",
+      "scene": "场景几乎清空，只剩一处可疑鼓包",
+      "hintSteps": [
+        "点帐篷角落鼓包",
+        "或摇出最后一个"
+      ],
+      "win": {
+        "action": "tap",
+        "target": "tent_bulge"
+      },
+      "failToast": "真的一颗都没有？",
+      "winToast": "压箱底的椰子！",
+      "shareHook": "收集癖满足",
+      "sourceNote": "找物·终局藏物"
+    },
+    {
+      "id": "lv_100",
+      "type": "drag_combine",
+      "title": "点燃求救信号",
+      "scene": "三堆柴、火把、空旷海滩",
+      "hintSteps": [
+        "把火把依次点着三堆柴",
+        "摆成可见信号"
+      ],
+      "win": {
+        "action": "drag_sequence",
+        "steps": [
+          {
+            "from": "torch",
+            "to": "pile1"
+          },
+          {
+            "from": "torch",
+            "to": "pile2"
+          },
+          {
+            "from": "torch",
+            "to": "pile3"
+          }
+        ]
+      },
+      "failToast": "一堆不够显眼",
+      "winToast": "三堆火！求救信号发出",
+      "shareHook": "荒岛百关毕业！",
+      "sourceNote": "拖合并·终局信号·荒岛皮"
+    }
+  ]
+}

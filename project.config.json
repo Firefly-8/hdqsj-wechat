@@ -1,7 +1,32 @@
 {
-  "description": "绝望岛求生记 · 微信小游戏（鲁滨逊漂流记主题合成放置）",
+  "description": "绝望岛求生记 · 微信小游戏（脑洞关卡 IAA）",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "_legacy"
+      },
+      {
+        "type": "file",
+        "value": "_brain_smoke.js"
+      },
+      {
+        "type": "file",
+        "value": "levels/levels-100.json"
+      },
+      {
+        "type": "folder",
+        "value": "images"
+      },
+      {
+        "type": "folder",
+        "value": "tools"
+      },
+      {
+        "type": "folder",
+        "value": "node_modules"
+      }
+    ],
     "include": []
   },
   "setting": {
