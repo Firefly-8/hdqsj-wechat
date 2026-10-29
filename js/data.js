@@ -475,11 +475,12 @@
     C: {
       id: 'C', name: '黄昏求生',
       palette: {
-        sea: '#1a3a4a', sand: '#2a4555', wood: '#C4A574', fire: '#E8763A',
-        leaf: '#6FA860', ink: '#FAF1DD', paper: '#1e3545', paper2: '#243848', paper3: '#4a6a7a',
+        sea: '#1a3a4a', sand: '#3a4a42', wood: '#C4A574', fire: '#E8763A',
+        leaf: '#6FA860', ink: '#FAF1DD', paper: '#1e3545', paper2: '#243848', paper3: '#6a7a68',
         seaDark: '#0a2a3a', seaDeep: '#061820',
-        panelBg: '#1e3545', cellStroke: '#E8763A', cellFill: '#2a4555',
-        emptyFill: '#152830', emptyStroke: '#4a6a7a', topText: '#FAF1DD', resBg: '#243848'
+        // 夜主题：面板半透明 + 沙色描边，与手绘 WebP 暖沙协调，避免整屏橙闪
+        panelBg: 'rgba(30,53,69,0.88)', cellStroke: '#C4A574', cellFill: '#3d4f48',
+        emptyFill: 'rgba(21,40,48,0.92)', emptyStroke: '#6a7a68', topText: '#FAF1DD', resBg: 'rgba(36,56,72,0.9)'
       }
     }
   };
@@ -493,15 +494,100 @@
     var id = themeIdByHour(d.getHours());
     return THEMES[id];
   }
-  function applyTheme(now) {
-    var t = getThemeInfo(now);
-    var p = t.palette;
+  // 主题色短过渡（切换时段时 lerp，避免整屏硬切）
+  var THEME_LERP_MS = 750;
+  var _themeLerp = { fromId: null, toId: null, t0: 0, fromPal: null, inited: false };
+
+  function _parseColor(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return { r: 0, g: 0, b: 0, a: 1 };
+    if (s.charAt(0) === '#') {
+      var h = s.slice(1);
+      if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+      return { r: parseInt(h.slice(0, 2), 16) || 0, g: parseInt(h.slice(2, 4), 16) || 0, b: parseInt(h.slice(4, 6), 16) || 0, a: 1 };
+    }
+    var m = s.match(/rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)/i);
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] != null ? +m[4] : 1 };
+    return { r: 0, g: 0, b: 0, a: 1 };
+  }
+  function _fmtColor(c) {
+    var r = Math.round(c.r), g = Math.round(c.g), b = Math.round(c.b);
+    if (c.a < 0.999) {
+      var a = Math.round(c.a * 1000) / 1000;
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+    function hx(n) { var s = n.toString(16); return s.length < 2 ? '0' + s : s; }
+    return '#' + hx(r) + hx(g) + hx(b);
+  }
+  function _lerpColor(a, b, t) {
+    var A = _parseColor(a), B = _parseColor(b);
+    return _fmtColor({
+      r: A.r + (B.r - A.r) * t,
+      g: A.g + (B.g - A.g) * t,
+      b: A.b + (B.b - A.b) * t,
+      a: A.a + (B.a - A.a) * t
+    });
+  }
+  function _snapPalette(pal) {
+    var out = {};
     for (var i = 0; i < THEME_PALETTE_KEYS.length; i++) {
       var k = THEME_PALETTE_KEYS[i];
-      if (p[k] != null) C[k] = p[k];
+      if (pal[k] != null) out[k] = pal[k];
+    }
+    return out;
+  }
+  function applyTheme(now) {
+    var d = now instanceof Date ? now : (now ? new Date(now) : new Date());
+    var ms = d.getTime();
+    var t = getThemeInfo(d);
+    if (!_themeLerp.inited) {
+      var p0 = t.palette;
+      for (var i0 = 0; i0 < THEME_PALETTE_KEYS.length; i0++) {
+        var k0 = THEME_PALETTE_KEYS[i0];
+        if (p0[k0] != null) C[k0] = p0[k0];
+      }
+      _themeLerp.fromId = t.id;
+      _themeLerp.toId = t.id;
+      _themeLerp.fromPal = _snapPalette(p0);
+      _themeLerp.t0 = ms;
+      _themeLerp.inited = true;
+      C._themeId = t.id;
+      C._themeName = t.name;
+      C._themeLerpU = 1;
+      return t;
+    }
+    if (t.id !== _themeLerp.toId) {
+      // 从当前已插值色起步，避免二次切换回跳
+      var cur = {};
+      for (var i1 = 0; i1 < THEME_PALETTE_KEYS.length; i1++) {
+        var k1 = THEME_PALETTE_KEYS[i1];
+        cur[k1] = C[k1];
+      }
+      _themeLerp.fromPal = cur;
+      _themeLerp.fromId = _themeLerp.toId;
+      _themeLerp.toId = t.id;
+      _themeLerp.t0 = ms;
+    }
+    var u = 1;
+    if (_themeLerp.fromId !== _themeLerp.toId) {
+      u = Math.min(1, Math.max(0, (ms - _themeLerp.t0) / THEME_LERP_MS));
+      u = u * u * (3 - 2 * u); // smoothstep
+      if (u >= 0.999) {
+        u = 1;
+        _themeLerp.fromId = _themeLerp.toId;
+        _themeLerp.fromPal = _snapPalette(THEMES[_themeLerp.toId].palette);
+      }
+    }
+    var target = THEMES[_themeLerp.toId].palette;
+    var from = _themeLerp.fromPal || target;
+    for (var i = 0; i < THEME_PALETTE_KEYS.length; i++) {
+      var k = THEME_PALETTE_KEYS[i];
+      if (target[k] == null) continue;
+      C[k] = u >= 1 ? target[k] : _lerpColor(from[k] != null ? from[k] : target[k], target[k], u);
     }
     C._themeId = t.id;
     C._themeName = t.name;
+    C._themeLerpU = u;
     return t;
   }
 

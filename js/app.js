@@ -2179,15 +2179,25 @@
     if (!a || Game.assetFailed && Game.assetFailed[id]) return false;
     return !!(a.complete && a.width);
   };
-  App.chainTopEm = function (chain) {
-    var best = null, bestLv = -1;
+  // 链顶阶物品 id（棋盘最高阶；空则回落该链顶级图，供 HUD WebP）
+  App.chainTopId = function (chain) {
+    var bestId = 0, bestLv = -1;
     for (var i = 0; i < S.space; i++) {
       var id = S.board[i];
       var it = id && D.ITEMS[id];
       if (!it || it.chain !== chain) continue;
-      if (it.lv > bestLv) { bestLv = it.lv; best = it; }
+      if (it.lv > bestLv) { bestLv = it.lv; bestId = id; }
     }
-    if (best) return best.em;
+    if (bestId) return bestId;
+    if (chain === 'wood') return 3;
+    if (chain === 'food') return 14;
+    if (chain === 'stone') return 23;
+    return 0;
+  };
+  App.chainTopEm = function (chain) {
+    var id = App.chainTopId(chain);
+    var it = id && D.ITEMS[id];
+    if (it) return it.em;
     if (chain === 'wood') return '\uD83E\uDEB5';
     if (chain === 'food') return '\uD83E\uDD65';
     if (chain === 'stone') return '\uD83E\uDEA8';
