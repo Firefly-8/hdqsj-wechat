@@ -880,8 +880,8 @@
       Game.FX.floaty(z.em + D.ITEMS[result.id].em + bonus, cx, cy);
     }
     if (!mergeAnim[pos]) mergeAnim[pos] = 0.35;
-    setTimeout(function () { autoMerge(); }, 120);
     save();
+    notifyIfNewReady();
   }
 
   // V1.18b: 采集地点常驻 —— 默认岸边；点采集直接采；菜单改地点后一直生效
@@ -961,32 +961,93 @@
     });
   }
 
-  // ============ 自动合并（3合1 连锁 + pop 弹跳 + 粒子） ============
+  // ============ V2.0 PR1：手拖三合（关掉全自动三合主路径） ============
+  // 玩家拖起一枚有物格，靠近另两枚同 id 时磁吸高亮；松手凑齐 3 个 → 留一格升 next、清另两格
   var mergeAnim = {};
-  function autoMerge() {
-    var merged = false;
-    for (var id in D.ITEMS) {
-      var it = D.ITEMS[id];
-      if (!it.next) continue;
-      var idxs = [];
-      for (var i = 0; i < S.space; i++) if (S.board[i] === +id) idxs.push(i);
-      if (idxs.length >= 3) {
-        var keep = idxs[0];
-        var next = it.next;
-        S.board[keep] = next;
-        S.board[idxs[1]] = 0;
-        S.board[idxs[2]] = 0;
-        // pop 弹跳动画（对应 .cell.merge）+ 粒子
-        mergeAnim[keep] = 0.35;
-        var r = getCellRect(keep);
-        Game.FX.sparkle(r.x + r.w / 2, r.y + r.h / 2, D.C.fire, 10);
-        Game.FX.floaty('\u2728' + D.ITEMS[next].em, r.x + r.w / 2, r.y - 8);
-        Game.FX.toast(it.name + '\u00D73 \u2192 ' + D.ITEMS[next].name + '\uFF01');
-        merged = true;
-      }
+  var MAGNET_R = 92; // 磁吸半径（逻辑像素）
+  var dragState = null; // { from, id, x, y, partners: [i,j] }
+
+  function clearDrag() {
+    dragState = null;
+    Game.drag = null;
+  }
+
+  function findMergePartners(fromIdx, itemId, fingerX, fingerY) {
+    var it = D.ITEMS[itemId];
+    if (!it || !it.next) return [];
+    var cands = [];
+    for (var i = 0; i < S.space; i++) {
+      if (i === fromIdx) continue;
+      if (S.board[i] !== itemId) continue;
+      var r = getCellRect(i);
+      var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      var dx = fingerX - cx, dy = fingerY - cy;
+      cands.push({ i: i, dist: Math.sqrt(dx * dx + dy * dy) });
     }
-    if (merged) { autoMerge(); return; } // 连锁
+    cands.sort(function (a, b) { return a.dist - b.dist; });
+    var out = [];
+    for (var k = 0; k < cands.length && out.length < 2; k++) {
+      if (cands[k].dist <= MAGNET_R) out.push(cands[k].i);
+    }
+    return out;
+  }
+
+  function hitTestBoardCell(px, py) {
+    if (Game.scene !== 'game' || Game.tab !== 'board') return -1;
+    var py0 = 148, ph = H - 148 - 118;
+    if (px < 10 || px > W - 10 || py < py0 || py > py0 + ph) return -1;
+    for (var i = 0; i < S.space; i++) {
+      var r = getCellRect(i);
+      if (py < r.y || py > r.y + r.h) continue; // 粗略跳过不可见
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  /** 执行一次三合：keep 升 next，清 a/b；toast「A×3 → B」+ 橙粒子/弹跳 */
+  function mergeThree(keep, a, b) {
+    var id = (dragState && dragState.id) || S.board[keep] || S.board[a] || S.board[b];
+    var it = D.ITEMS[id];
+    if (!it || !it.next) return false;
+    // 拖起期间 board[from] 仍保留原值，三格应同 id
+    if (S.board[keep] !== id || S.board[a] !== id || S.board[b] !== id) return false;
+    var next = it.next;
+    S.board[keep] = next;
+    S.board[a] = 0;
+    S.board[b] = 0;
+    mergeAnim[keep] = 0.35;
+    var r = getCellRect(keep);
+    Game.FX.sparkle(r.x + r.w / 2, r.y + r.h / 2, D.C.fire, 10);
+    Game.FX.floaty('\u2728' + D.ITEMS[next].em, r.x + r.w / 2, r.y - 8);
+    Game.FX.toast(it.name + '\u00D73 \u2192 ' + D.ITEMS[next].name);
     save();
+    notifyIfNewReady();
+    return true;
+  }
+
+  function updateDragAt(px, py) {
+    if (!dragState) return;
+    dragState.x = px;
+    dragState.y = py;
+    dragState.partners = findMergePartners(dragState.from, dragState.id, px, py);
+    Game.drag = dragState;
+  }
+
+  function tryCommitDrag() {
+    if (!dragState) return;
+    var from = dragState.from;
+    var partners = dragState.partners || [];
+    if (partners.length >= 2) {
+      // 留靠近落点的一枚升 next，清拖源与另一枚
+      var keep = partners[0];
+      var other = partners[1];
+      mergeThree(keep, from, other);
+    }
+    clearDrag();
+  }
+
+  // 兼容旧调用点：全自动三合已关闭，改为空操作（仅提醒可建造）
+  function autoMerge() {
     notifyIfNewReady();
   }
 
@@ -1553,14 +1614,14 @@
     if (cb) cb();
   }
 
-  // ============ 触摸 + 滚动 ============
+  // ============ 触摸 + 滚动 + 手拖三合 ============
   var pendingHit = null;
   var scrollTouchStartY = null;
   var scrollTouchStartScrollY = null;
   var campScrollMoved = false;
 
   function touchPos(e) {
-    var t = e.touches && e.touches[0];
+    var t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
     if (!t) return null;
     return { x: t.clientX * (LOGICAL_W / W_RAW), y: t.clientY * (LOGICAL_W / W_RAW) };
   }
@@ -1569,7 +1630,6 @@
     if (!p) return;
     // 弹窗优先
     if (modal) {
-      // 命中弹窗按钮
       for (var i = Game.hits.length - 1; i >= 0; i--) {
         var h = Game.hits[i];
         if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
@@ -1582,13 +1642,28 @@
       pressedRect = null;
       return;
     }
-    // CG 场景任意点击跳过
     if (Game.scene === 'cg') {
       pendingHit = { cb: skipCG };
       pressedRect = null;
       return;
     }
-    // 棋盘面板区域（4列滚动）检测滑动
+    // V2.0：棋盘上拖有物格 = 手拖三合；点空白才滚动
+    if (Game.scene === 'game' && Game.tab === 'board') {
+      var cellIdx = hitTestBoardCell(p.x, p.y);
+      if (cellIdx >= 0 && S.board[cellIdx]) {
+        var itemId = S.board[cellIdx];
+        var it0 = D.ITEMS[itemId];
+        if (it0 && it0.next) {
+          dragState = { from: cellIdx, id: itemId, x: p.x, y: p.y, partners: [] };
+          Game.drag = dragState;
+          scrollTouchStartY = null;
+          pendingHit = null;
+          pressedRect = null;
+          return;
+        }
+        // 满级不可合：仍允许滚动，不当拖合
+      }
+    }
     var py = 148, ph = H - 148 - 118;
     var inScroll = false;
     if (Game.scene === 'game' && Game.tab === 'board' && p.x >= 10 && p.x <= W - 10 && p.y >= py && p.y <= py + ph) {
@@ -1596,19 +1671,16 @@
       scrollTouchStartScrollY = Game.boardScrollY || 0;
       inScroll = true;
     } else if (Game.scene === 'game' && Game.tab === 'camp' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
-      // V1.6: 建造页滚动检测
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.campScrollY || 0;
       campScrollMoved = false;
       inScroll = true;
     } else if (Game.scene === 'game' && Game.tab === 'log' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
-      // V1.8: 日记页滚动检测
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.logScrollY || 0;
       inScroll = true;
     }
     if (!inScroll) scrollTouchStartY = null;
-    // 正常场景：逆序命中（上层优先）
     for (var j = Game.hits.length - 1; j >= 0; j--) {
       var hj = Game.hits[j];
       if (p.x >= hj.x && p.x <= hj.x + hj.w && p.y >= hj.y && p.y <= hj.y + hj.h) {
@@ -1621,7 +1693,15 @@
     pressedRect = null;
   }
   function onTouchEnd(e) {
-    // 处理滚动手势：建造页需区分点击与滑动，棋盘页沿用原逻辑
+    if (dragState) {
+      var pEnd = touchPos(e);
+      if (pEnd) updateDragAt(pEnd.x, pEnd.y);
+      tryCommitDrag();
+      pendingHit = null;
+      pressedRect = null;
+      scrollTouchStartY = null;
+      return;
+    }
     if (scrollTouchStartY !== null) {
       var wasCamp = (Game.scene === 'game' && Game.tab === 'camp');
       scrollTouchStartY = null;
@@ -1635,46 +1715,47 @@
         campScrollMoved = false;
         return;
       }
-      return; // 棋盘：拖动不触发点击
+      return;
     }
     if (pendingHit) {
-      var cb = pendingHit.cb;
+      var cb2 = pendingHit.cb;
       pendingHit = null;
       pressedRect = null;
-      if (cb) cb();
+      if (cb2) cb2();
     } else {
       pressedRect = null;
     }
   }
-  // 触摸移动：处理棋盘 / 建造页滚动
   function onTouchMove(e) {
-    if (scrollTouchStartY === null || Game.scene !== 'game') return;
     var p = touchPos(e);
     if (!p) return;
+    if (dragState) {
+      updateDragAt(p.x, p.y);
+      return;
+    }
+    if (scrollTouchStartY === null || Game.scene !== 'game') return;
     if (Game.tab === 'board') {
-      var dy = scrollTouchStartY - p.y; // 手指上滑为正
-      var scrollDelta = dy * 1.5; // 滚动系数
+      var dy = scrollTouchStartY - p.y;
+      var scrollDelta = dy * 1.5;
       var newScrollY = scrollTouchStartScrollY + scrollDelta;
-      // 计算最大滚动值
       var cols = 4, cellGap = 12, bh2 = 52;
       var totalRows = Math.ceil(S.space / cols);
       var maxScroll = Math.max(0, totalRows * (bh2 + cellGap) - (H - 148 - 118 - 26));
       newScrollY = Math.max(0, Math.min(maxScroll, newScrollY));
       Game.boardScrollY = newScrollY;
     } else if (Game.tab === 'camp') {
-      // V1.6: 建造页滚动（区分点击与滑动）
       var cdy = scrollTouchStartY - p.y;
       if (Math.abs(cdy) > 6) campScrollMoved = true;
       var maxCamp = Game.campMaxScroll || 0;
       Game.campScrollY = Math.max(0, Math.min(maxCamp, scrollTouchStartScrollY + cdy * 1.5));
     } else if (Game.tab === 'log') {
-      // V1.8: 日记页滚动
       var ldy = scrollTouchStartY - p.y;
       var maxLog = Game.logMaxScroll || 0;
       Game.logScrollY = Math.max(0, Math.min(maxLog, scrollTouchStartScrollY + ldy * 1.5));
     }
   }
   function onTouchCancel() {
+    if (dragState) clearDrag();
     pendingHit = null;
     pressedRect = null;
     scrollTouchStartY = null;
@@ -1726,6 +1807,9 @@
     }
     tryTickEnergy();
 
+    // V2.0：按本地时刷新主题色（国内即北京时间）
+    if (D.applyTheme) D.applyTheme(new Date(now));
+
     // 绘制
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     Game.Render.render(ctx, W, H, now / 1000);
@@ -1767,6 +1851,8 @@
     Game.modal = null;
     Game.cg = null;
     Game.mergeAnim = mergeAnim;
+    Game.drag = null;
+    if (D.applyTheme) D.applyTheme();
     Game.AD.init();
 
     // 预加载物品手绘图（透明 WebP，失败降级 emoji）
@@ -1879,6 +1965,10 @@
   App.cookFood = cookFood;
   // V1.12: 原著改编层导出 —— 两季 / 木刻记日 / 鹦鹉 Poll
   App.getSeasonInfo = getSeasonInfo;
+  // V2.0 PR1 主题
+  App.getThemeInfo = function () {
+    return D.getThemeInfo ? D.getThemeInfo() : { id: 'A', name: '羊皮纸绘本' };
+  };
   App.getNotchInfo = function () {
     return {
       day: S.day,

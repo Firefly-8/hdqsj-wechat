@@ -55,12 +55,12 @@
   FX.campUpActive = function () { return campUpT > 0; };
   FX.campUpTime = function () { return campUpT; };
 
-  // V1.6: 采集动画效果（放慢到 2.4 秒，更有「挖掘」代入感）
-  var GATHER_DUR = 2.4;
+  // V2.0 PR1: 采集动画压到 ≤0.6s（原 V1.6 为 2.4s，手感偏慢）
+  var GATHER_DUR = 0.55;
   var gatherAnimT = 0;
   var gatherAnimCb = null;
   FX.gatherAnim = function (cb) {
-    gatherAnimT = GATHER_DUR; // 2.4 秒动画
+    gatherAnimT = GATHER_DUR;
     gatherAnimCb = cb;
   };
   FX.gatherAnimActive = function () { return gatherAnimT > 0; };

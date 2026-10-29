@@ -442,6 +442,71 @@
     '材料还差。有的事除了耐心，没有别的办法。'
   ];
 
+
+  // ============ V2.0 PR1：按时段三主题（设备本地时，国内即北京时间） ============
+  // 6:00–16:59 → B 晴空海岛；17:00–19:59 → A 羊皮纸绘本；20:00–5:59 → C 黄昏求生
+  // 主题主要改绘制用色，不改信息架构
+  var THEME_PALETTE_KEYS = [
+    'sea', 'sand', 'wood', 'fire', 'leaf', 'ink', 'paper', 'paper2', 'paper3',
+    'seaDark', 'seaDeep', 'panelBg', 'cellStroke', 'cellFill', 'emptyFill', 'emptyStroke',
+    'topText', 'resBg'
+  ];
+  var THEMES = {
+    A: {
+      id: 'A', name: '羊皮纸绘本',
+      palette: {
+        sea: '#2E7D9A', sand: '#F2D5A0', wood: '#8B5E3C', fire: '#E8763A',
+        leaf: '#6FA860', ink: '#4A3428', paper: '#FAF1DD', paper2: '#E8D6B0', paper3: '#c9b893',
+        seaDark: '#1a3a4a', seaDeep: '#0a2a3a',
+        panelBg: '#FFFFFF', cellStroke: '#8B5E3C', cellFill: '#F2D5A0',
+        emptyFill: '#FAF1DD', emptyStroke: '#c9b893', topText: '#FFFFFF', resBg: '#FFFFFF'
+      }
+    },
+    B: {
+      id: 'B', name: '晴空海岛',
+      palette: {
+        sea: '#3BAFD0', sand: '#F7E8C8', wood: '#6B9E72', fire: '#E8763A',
+        leaf: '#4CAF70', ink: '#1F4A5A', paper: '#F5FBFF', paper2: '#E3F2F7', paper3: '#A8D5C4',
+        seaDark: '#2E8BB0', seaDeep: '#1A6A8A',
+        panelBg: 'rgba(255,255,255,0.92)', cellStroke: '#4CAF70', cellFill: '#F7E8C8',
+        emptyFill: '#F5FBFF', emptyStroke: '#A8D5C4', topText: '#FFFFFF', resBg: 'rgba(255,255,255,0.9)'
+      }
+    },
+    C: {
+      id: 'C', name: '黄昏求生',
+      palette: {
+        sea: '#1a3a4a', sand: '#2a4555', wood: '#C4A574', fire: '#E8763A',
+        leaf: '#6FA860', ink: '#FAF1DD', paper: '#1e3545', paper2: '#243848', paper3: '#4a6a7a',
+        seaDark: '#0a2a3a', seaDeep: '#061820',
+        panelBg: '#1e3545', cellStroke: '#E8763A', cellFill: '#2a4555',
+        emptyFill: '#152830', emptyStroke: '#4a6a7a', topText: '#FAF1DD', resBg: '#243848'
+      }
+    }
+  };
+  function themeIdByHour(h) {
+    if (h >= 6 && h < 17) return 'B';
+    if (h >= 17 && h < 20) return 'A';
+    return 'C';
+  }
+  function getThemeInfo(now) {
+    var d = now || new Date();
+    var id = themeIdByHour(d.getHours());
+    return THEMES[id];
+  }
+  function applyTheme(now) {
+    var t = getThemeInfo(now);
+    var p = t.palette;
+    for (var i = 0; i < THEME_PALETTE_KEYS.length; i++) {
+      var k = THEME_PALETTE_KEYS[i];
+      if (p[k] != null) C[k] = p[k];
+    }
+    C._themeId = t.id;
+    C._themeName = t.name;
+    return t;
+  }
+  // 启动时先套一次默认主题（按当前本地时）
+  applyTheme();
+
   globalThis.Game = globalThis.Game || {};
   Game.DATA = {
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
@@ -457,6 +522,8 @@
     // V1.13 原著细节扩容
     INK_STAGES: INK_STAGES, SORRY_LINES: SORRY_LINES,
     // V1.19
-    FLOTSAM: FLOTSAM
+    FLOTSAM: FLOTSAM,
+    // V2.0 PR1 主题
+    THEMES: THEMES, themeIdByHour: themeIdByHour, getThemeInfo: getThemeInfo, applyTheme: applyTheme
   };
 })();

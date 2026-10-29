@@ -478,7 +478,7 @@
     // 顶栏（对应 .topbar）
     ctx.fillStyle = C.sea;
     ctx.fillRect(0, 0, W, 44);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = C.topText || '#FFFFFF';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -498,7 +498,7 @@
     ctx.fillText('第 ' + S.day + ' 天' + seasonText, W - 14, 22);
     // 第二行：天气 + 饱食度（V1.12: 天气由第一行下移至此，给季节让位）
     ctx.font = '10px sans-serif';
-    ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : '#FFFFFF';
+    ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : (C.topText || '#FFFFFF');
     ctx.fillText(weatherText + (foodText ? '  ' + foodText : ''), W - 14, 36);
     hit(W - 90, 0, 90, 44, function () { Game.App.backHome(); });
 
@@ -558,7 +558,7 @@
     var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = 106;
     for (var i = 0; i < 3; i++) {
       var rx = 10 + i * (rw + gap);
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = C.resBg || '#FFFFFF';
       roundRect(ctx, rx, ry, rw, 34, 8);
       ctx.fill();
       ctx.strokeStyle = C.wood;
@@ -582,7 +582,7 @@
     var py = 148, ph = H - 148 - 118;
     // 滚动状态：boardScrollY，默认 0，最大值为 (总行数-可视行数) * 行高
     var boardScrollY = Game.boardScrollY || 0;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = C.panelBg || '#FFFFFF';
     roundRect(ctx, 10, py, W - 20, ph, 12);
     ctx.fill();
     // 棋盘区域剪裁：超出部分不绘制
@@ -599,10 +599,11 @@
     ctx.fillStyle = C.wood;
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('合成棋盘（3连自动升级）', 20, py + 16);
+    ctx.fillText('\u62D6\u52A8\u4E09\u5408\u4E00\uFF08\u9760\u8FD1\u540C\u7269\u78C1\u5438\uFF09', 20, py + 16);
     ctx.textAlign = 'right';
     var used = Game.App.boardUsed();
-    ctx.fillText(used + '/' + S.space, W - 20, py + 16);
+    var themeName = (Game.App.getThemeInfo && Game.App.getThemeInfo().name) || '';
+    ctx.fillText(used + '/' + S.space + (themeName ? (' · ' + themeName) : ''), W - 20, py + 16);
 
     // 棋盘格子（4 列，支持滚动）
     var cols = 4;
@@ -649,18 +650,26 @@
       ctx.translate(cx + bw2 / 2, cy + bh2 / 2);
       ctx.scale(popScale, popScale);
       ctx.translate(-(cx + bw2 / 2), -(cy + bh2 / 2));
-      if (id) {
-        var it = Game.DATA.ITEMS[id];
-        // 方案一：格底统一为沙色 #F2D5A0，与手绘图投影自然融合
-        ctx.fillStyle = C.sand;
+      var drag = Game.drag;
+      var isDragFrom = drag && drag.from === ci;
+      var isPartner = drag && drag.partners && (drag.partners[0] === ci || drag.partners[1] === ci);
+      var showId = isDragFrom ? 0 : id; // 拖起源格显示空位，浮层另画
+      if (showId) {
+        var it = Game.DATA.ITEMS[showId];
+        ctx.fillStyle = C.cellFill || C.sand;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.fill();
-        ctx.strokeStyle = C.wood;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isPartner ? C.fire : (C.cellStroke || C.wood);
+        ctx.lineWidth = isPartner ? 3 : 1.5;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.stroke();
-        // 物品：优先手绘图，未加载完/失败降级 emoji
-        var _a = Game.assets && Game.assets[id];
+        if (isPartner) {
+          // 磁吸高亮光晕
+          ctx.fillStyle = 'rgba(232,118,58,0.22)';
+          roundRect(ctx, cx - 2, cy - 2, bw2 + 4, bh2 + 4, 8);
+          ctx.fill();
+        }
+        var _a = Game.assets && Game.assets[showId];
         if (_a && _a.complete && _a.width) {
           var _pad = bw2 * 0.12;
           ctx.drawImage(_a, cx + _pad, cy + _pad, bw2 - _pad * 2, bh2 - _pad * 2);
@@ -668,6 +677,7 @@
           ctx.font = (bh2 * 0.6) + 'px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          ctx.fillStyle = C.ink;
           ctx.fillText(it.em, cx + bw2 / 2, cy + bh2 / 2 - 2);
         }
         ctx.font = '8px sans-serif';
@@ -675,15 +685,43 @@
         ctx.textAlign = 'right';
         ctx.fillText('Lv' + it.lv, cx + bw2 - 3, cy + bh2 - 3);
       } else {
-        ctx.fillStyle = C.paper;
+        ctx.fillStyle = C.emptyFill || C.paper;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.fill();
-        ctx.strokeStyle = C.paper3;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isDragFrom ? C.fire : (C.emptyStroke || C.paper3);
+        ctx.lineWidth = isDragFrom ? 2 : 1.5;
         ctx.setLineDash([4, 3]);
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+    // V2.0：浮层棋子跟随手指（画在剪裁内，不越出面板太多也无妨）
+    if (Game.drag && Game.drag.id) {
+      var d = Game.drag;
+      var dit = Game.DATA.ITEMS[d.id];
+      var fw = bw2 * 0.92, fh = bh2 * 0.92;
+      var fx = d.x - fw / 2, fy = d.y - fh / 2;
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = C.cellFill || C.sand;
+      roundRect(ctx, fx, fy, fw, fh, 7);
+      ctx.fill();
+      ctx.strokeStyle = (d.partners && d.partners.length >= 2) ? C.fire : (C.cellStroke || C.wood);
+      ctx.lineWidth = 2.5;
+      roundRect(ctx, fx, fy, fw, fh, 7);
+      ctx.stroke();
+      var _da = Game.assets && Game.assets[d.id];
+      if (_da && _da.complete && _da.width) {
+        var _dp = fw * 0.12;
+        ctx.drawImage(_da, fx + _dp, fy + _dp, fw - _dp * 2, fh - _dp * 2);
+      } else if (dit) {
+        ctx.font = (fh * 0.55) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = C.ink;
+        ctx.fillText(dit.em, d.x, d.y - 2);
       }
       ctx.restore();
     }
