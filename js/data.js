@@ -504,6 +504,84 @@
     C._themeName = t.name;
     return t;
   }
+
+  // ============ V2.0：日夜时段 / 建造偏置 / 题材意外 ============
+  // 与主题同一套本地时：day 6–17 / dusk 17–20 / night 20–6
+  function dayPeriodByHour(h) {
+    if (h >= 6 && h < 17) return 'day';
+    if (h >= 17 && h < 20) return 'dusk';
+    return 'night';
+  }
+  function getDayPeriod(now) {
+    var d = now || new Date();
+    return dayPeriodByHour(d.getHours());
+  }
+  // 建造材料倍率：白天略减、夜间略增（整数需求上至少能感到 ±1）
+  var BUILD_COST_MUL = { day: 0.88, dusk: 1.0, night: 1.12 };
+  function scaleBuildNeed(n, mul, period) {
+    n = +n || 0;
+    if (n <= 0) return 0;
+    var out = Math.max(1, Math.round(n * mul));
+    if (period === 'day' && n >= 3 && out >= n) out = n - 1;
+    if (period === 'night' && n >= 2 && out <= n) out = n + 1;
+    return out;
+  }
+  function getBuildCostMul(now) {
+    var p = getDayPeriod(now);
+    return BUILD_COST_MUL[p] || 1;
+  }
+  // 偶发意外（克制频率；文案均带明确得失，禁止无提示扣资源）
+  // kind: toast | modal；effect 由 app 解释
+  var DAYNIGHT_INCIDENTS = [
+    // —— 白天：偏安全 / 小收益 ——
+    { id: 'day_tide', period: 'day', weight: 3, kind: 'toast',
+      title: '退潮的礼物',
+      text: '潮水退下去，沙滩上多了两截能用的浮木。\n（白天采集：浮木 ×1）',
+      effect: { type: 'gain', ids: [1] } },
+    { id: 'day_shade', period: 'day', weight: 2, kind: 'toast',
+      title: '树荫歇脚',
+      text: '你在树荫下坐了一会儿，腿不那么软了。\n体力 +1',
+      effect: { type: 'energy', amount: 1 } },
+    { id: 'day_calm', period: 'day', weight: 2, kind: 'toast',
+      title: '岛上难得安静',
+      text: '风都轻轻的。你把木桩又夯实了一寸——\n白天干活，心里踏实。',
+      effect: { type: 'none' } },
+    // —— 傍晚：轻度意外 ——
+    { id: 'dusk_slip', period: 'dusk', weight: 3, kind: 'toast',
+      title: '暮色绊脚',
+      text: '天色一暗，脚下一滑，篓子里掉出一点东西。\n（丢失 1 件初级物资）',
+      effect: { type: 'lose_l1', amount: 1 } },
+    { id: 'dusk_scare', period: 'dusk', weight: 2, kind: 'toast',
+      title: '林边一声响',
+      text: '灌木丛里「哗」的一声，你手里的火把晃了一下。\n只是野猫。饱食 -1（受了惊吓，不想吃饭）',
+      effect: { type: 'food', amount: -1 } },
+    { id: 'dusk_ember', period: 'dusk', weight: 2, kind: 'toast',
+      title: '余烬还温',
+      text: '傍晚的灶灰里还留着一点热。你烤热了手。\n体力 +1',
+      effect: { type: 'energy', amount: 1 } },
+    // —— 夜间：野兽 / 意外，可损可赚 ——
+    { id: 'night_beast', period: 'night', weight: 3, kind: 'modal',
+      title: '\uD83D\uDC3B 夜里的脚步声',
+      body: '黑暗里有东西在栅栏外转。\n稳守要耗材料；硬拼可能多捞，也可能赔得更惨。',
+      options: [
+        { label: '稳守', primary: true, cb: 'dn_beast_safe' },
+        { label: '冒险', primary: false, cb: 'dn_beast_risk' },
+        { label: '躲进棚里', primary: false, cb: 'dn_beast_hide' }
+      ] },
+    { id: 'night_storm_leak', period: 'night', weight: 2, kind: 'toast',
+      title: '棚顶漏雨',
+      text: '夜里雨从缝里钻进来，潮坏了一点存粮。\n饱食 -2（你把湿了的椰肉扔了）',
+      effect: { type: 'food', amount: -2 } },
+    { id: 'night_loot', period: 'night', weight: 2, kind: 'toast',
+      title: '月下的岸',
+      text: '你提着火把去看潮线，竟捞到半截还能用的木板。\n（获得 木板 ×1）',
+      effect: { type: 'gain', ids: [2] } },
+    { id: 'night_interrupt', period: 'night', weight: 2, kind: 'toast',
+      title: '别往林子里走',
+      text: '远处两点绿光一闪，你缩回营地。\n今晚先别采了。——体力未扣，只是吓了一跳。',
+      effect: { type: 'none' } }
+  ];
+
   // 启动时先套一次默认主题（按当前本地时）
   applyTheme();
 
@@ -524,6 +602,10 @@
     // V1.19
     FLOTSAM: FLOTSAM,
     // V2.0 PR1 主题
-    THEMES: THEMES, themeIdByHour: themeIdByHour, getThemeInfo: getThemeInfo, applyTheme: applyTheme
+    THEMES: THEMES, themeIdByHour: themeIdByHour, getThemeInfo: getThemeInfo, applyTheme: applyTheme,
+    // V2.0 日夜
+    dayPeriodByHour: dayPeriodByHour, getDayPeriod: getDayPeriod,
+    BUILD_COST_MUL: BUILD_COST_MUL, scaleBuildNeed: scaleBuildNeed, getBuildCostMul: getBuildCostMul,
+    DAYNIGHT_INCIDENTS: DAYNIGHT_INCIDENTS
   };
 })();

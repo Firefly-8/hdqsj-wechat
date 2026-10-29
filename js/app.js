@@ -185,6 +185,170 @@
     }
     return D.WEATHER[0];
   }
+  // V2.0：日夜时段 + 建造需求偏置
+  function getDayPeriod() {
+    return D.getDayPeriod ? D.getDayPeriod() : 'day';
+  }
+  function getEffectiveNeed(needMap) {
+    var period = getDayPeriod();
+    var mul = D.getBuildCostMul ? D.getBuildCostMul() : 1;
+    var out = {};
+    for (var id in needMap) {
+      var raw = needMap[id];
+      out[id] = D.scaleBuildNeed ? D.scaleBuildNeed(raw, mul, period) : raw;
+    }
+    return out;
+  }
+  function periodBuildTip() {
+    var p = getDayPeriod();
+    if (p === 'day') return '白天好干活：材料需求略减';
+    if (p === 'night') return '天黑了，天亮再盖更稳（夜间材料略增，仍可建造）';
+    return '傍晚光线渐暗，建造按常规消耗';
+  }
+
+  // V2.0：日夜偶发意外（克制：每天最多 3 次，冷却 10 分钟）
+  var DN_COOLDOWN_MS = 10 * 60 * 1000;
+  var DN_MAX_PER_DAY = 3;
+  function pickDnIncident(period) {
+    var list = D.DAYNIGHT_INCIDENTS || [];
+    var pool = [], total = 0, i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].period !== period) continue;
+      pool.push(list[i]);
+      total += list[i].weight || 1;
+    }
+    if (!pool.length) return null;
+    var r = Math.random() * total, c = 0;
+    for (i = 0; i < pool.length; i++) {
+      c += pool[i].weight || 1;
+      if (r < c) return pool[i];
+    }
+    return pool[0];
+  }
+  function applyDnEffect(eff) {
+    if (!eff || eff.type === 'none') return;
+    if (eff.type === 'energy') {
+      var a = eff.amount || 0;
+      if (a > 0) S.energy = Math.min(effectiveMaxEnergy(), S.energy + a);
+      else S.energy = Math.max(0, S.energy + a);
+    } else if (eff.type === 'food') {
+      var f = eff.amount || 0;
+      S.food = Math.max(0, Math.min(S.maxFood, (S.food || 0) + f));
+    } else if (eff.type === 'gain') {
+      var ids = eff.ids || [];
+      for (var g = 0; g < ids.length; g++) {
+        var p = firstEmpty();
+        if (p < 0) { Game.FX.toast('棋盘满了，这次意外收获没地方放'); break; }
+        S.board[p] = ids[g];
+      }
+      notifyIfNewReady();
+    } else if (eff.type === 'lose_l1') {
+      var left = eff.amount || 1;
+      var lost = 0;
+      for (var li = S.space - 1; li >= 0 && left > 0; li--) {
+        var v = S.board[li];
+        if (v === 1 || v === 11 || v === 21) {
+          S.board[li] = 0; left--; lost++;
+        }
+      }
+      if (lost === 0) Game.FX.toast('篓子里没什么可掉的，虚惊一场');
+    }
+    save();
+  }
+  function runDnIncident(inc) {
+    if (!inc) return;
+    S._dnLastTs = Date.now();
+    S._dnCount = (S._dnCount || 0) + 1;
+    save();
+    if (inc.kind === 'modal') {
+      openModal({
+        title: inc.title,
+        body: inc.body,
+        buttons: (inc.options || []).map(function (opt) {
+          return {
+            label: opt.label,
+            primary: !!opt.primary,
+            cb: (function (cb) {
+              return function () {
+                closeModal();
+                handleDnChoice(cb);
+              };
+            })(opt.cb)
+          };
+        })
+      });
+      return;
+    }
+    applyDnEffect(inc.effect);
+    Game.FX.toast((inc.title ? (inc.title + '\n') : '') + (inc.text || ''), 2400);
+  }
+  function handleDnChoice(cb) {
+    if (cb === 'dn_beast_safe') {
+      var def = getDefenseLevel();
+      if (def >= 3) {
+        Game.FX.toast('箭塔夜里也醒着，野兽没讨到便宜。无损。');
+      } else if (countItem(1) >= 1) {
+        for (var i = S.space - 1; i >= 0; i--) {
+          if (S.board[i] === 1) { S.board[i] = 0; break; }
+        }
+        Game.FX.toast('你用 1 浮木堵上缺口，听着外面的脚步渐渐远了。');
+      } else {
+        S.energy = Math.max(0, S.energy - 1);
+        Game.FX.toast('没有浮木可挡，你攥着火把熬过半夜。体力 -1');
+      }
+      save();
+    } else if (cb === 'dn_beast_risk') {
+      var defR = getDefenseLevel();
+      var win = Math.random() < (0.4 + defR * 0.15);
+      if (win) {
+        var got = 0;
+        for (var k = 0; k < 2; k++) {
+          var p = firstEmpty();
+          if (p < 0) break;
+          S.board[p] = D.L1[Math.floor(Math.random() * 3)];
+          got++;
+        }
+        notifyIfNewReady();
+        Game.FX.toast(got > 0
+          ? ('你唬退了它，还捡回 ' + got + ' 件物资。夜里险中有赚。')
+          : '唬退了它，可棋盘已满，战利品装不下。');
+      } else {
+        var loseN = defR >= 1 ? 1 : 2;
+        var lost = 0;
+        for (var j = S.space - 1; j >= 0 && lost < loseN; j--) {
+          if (S.board[j]) { S.board[j] = 0; lost++; }
+        }
+        S.food = Math.max(0, (S.food || 0) - 1);
+        Game.FX.toast('它冲散了你的存货。损失 ' + lost + ' 件物资，饱食 -1');
+      }
+      save();
+    } else if (cb === 'dn_beast_hide') {
+      Game.FX.toast('你缩进棚里，屏住呼吸。天亮时栅栏还在，只是一夜没睡好。\n体力未扣，但天亮前不宜再冒险采集。');
+      S._dnGatherBlockUntil = Date.now() + 3 * 60 * 1000; // 3 分钟内采集被劝退
+      save();
+    }
+  }
+  function maybeDayNightIncident(source) {
+    if (!S || Game.scene !== 'game' || Game.modal) return false;
+    if (S.day < 2) return false;
+    if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return false;
+    if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return false;
+    var today = new Date().toDateString();
+    if (S._dnDate !== today) { S._dnDate = today; S._dnCount = 0; }
+    if ((S._dnCount || 0) >= DN_MAX_PER_DAY) return false;
+    var now = Date.now();
+    if (S._dnLastTs && now - S._dnLastTs < DN_COOLDOWN_MS) return false;
+    var period = getDayPeriod();
+    var chance = period === 'day' ? 0.10 : (period === 'dusk' ? 0.20 : 0.24);
+    if (source === 'tick') chance *= 0.25;
+    if (source === 'bottle') chance *= 0.6;
+    if (Math.random() > chance) return false;
+    var inc = pickDnIncident(period);
+    if (!inc) return false;
+    runDnIncident(inc);
+    return true;
+  }
+
   // V1.12: 原著细节事件池（一次性，按天数控时出现）
   function loreEventPool() {
     var out = [];
@@ -661,8 +825,9 @@
         if (S.stages.indexOf(st.id) >= 0) continue;
         if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
         var can = true;
-        for (var id in st.need) {
-          if (countItem(+id) < st.need[id]) { can = false; break; }
+        var needMap = getEffectiveNeed(st.need);
+        for (var id in needMap) {
+          if (countItem(+id) < needMap[id]) { can = false; break; }
         }
         if (can) ids.push(st.id);
       }
@@ -707,9 +872,10 @@
         if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
         var short = [];
         var can = true;
-        for (var id in st.need) {
+        var needMap = getEffectiveNeed(st.need);
+        for (var id in needMap) {
           var have = countItem(+id);
-          var need = st.need[id];
+          var need = needMap[id];
           if (have < need) {
             can = false;
             short.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + '\u00D7' + (need - have));
@@ -720,8 +886,8 @@
           : ('下一目标：' + st.name + '，还差 ' + short.slice(0, 3).join('\u3001'));
         if (!can && short.length) {
           var hintZone = '';
-          for (var id2 in st.need) {
-            if (countItem(+id2) >= st.need[id2]) continue;
+          for (var id2 in needMap) {
+            if (countItem(+id2) >= needMap[id2]) continue;
             var chain = D.ITEMS[+id2] && D.ITEMS[+id2].chain;
             if (chain === 'wood') { hintZone = '岸边'; break; }
             if (chain === 'food') { hintZone = '林中'; break; }
@@ -930,6 +1096,18 @@
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
     if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; }
+    // V2.0：夜间偶发「先别采」劝退（野兽藏过后短时）
+    if (S._dnGatherBlockUntil && Date.now() < S._dnGatherBlockUntil) {
+      Game.FX.toast('夜里刚受过惊，先守在营地。\n过几分钟再出门更稳。');
+      return;
+    }
+    // 夜间小概率出门即被吓回（不扣体力，有明确提示）
+    if (getDayPeriod() === 'night' && Math.random() < 0.08) {
+      Game.FX.toast('\uD83D\uDC3B 林子里两点绿光一闪，你缩了回来。\n今夜采集暂缓——体力未扣。');
+      S._dnLastTs = Date.now();
+      save();
+      return;
+    }
     var pos = firstEmpty();
     if (pos < 0) { emptyLine('full'); return; }
 
@@ -958,6 +1136,8 @@
         if (z.id === 'shore') maybeShoreFlotsam();
       }
       save();
+      // 采集后小概率触发日夜意外（有冷却，不刷屏）
+      setTimeout(function () { maybeDayNightIncident('gather'); }, 400);
     });
   }
 
@@ -1106,19 +1286,22 @@
     }
     // V1.13 原著彩蛋：原文里他自嘲「既是个蹩脚的木工，也是个蹩脚的裁缝」
     // 把单调的「资源不足」换成带自嘲的口吻，但保留「还差什么」的信息量
+    var effNeed = getEffectiveNeed(st.need);
+    var period = getDayPeriod();
     var shortList = [];
-    for (var id in st.need) {
-      if (countItem(+id) < st.need[id]) {
-        shortList.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + ' \u00D7' + (st.need[id] - countItem(+id)));
+    for (var id in effNeed) {
+      if (countItem(+id) < effNeed[id]) {
+        shortList.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + ' \u00D7' + (effNeed[id] - countItem(+id)));
       }
     }
     if (shortList.length > 0) {
       var sorry = D.SORRY_LINES[Math.floor(Math.random() * D.SORRY_LINES.length)];
-      Game.FX.toast(sorry + '\n还差：' + shortList.join('\u3001'));
+      var biasTip = period === 'night' ? '\n（夜里费料，天亮再盖更稳）' : (period === 'day' ? '\n（白天好干活，需求已略减）' : '');
+      Game.FX.toast(sorry + '\n还差：' + shortList.join('\u3001') + biasTip);
       return;
     }
-    for (var id2 in st.need) {
-      var n = st.need[id2];
+    for (var id2 in effNeed) {
+      var n = effNeed[id2];
       for (var k = S.space - 1; k >= 0 && n > 0; k--) {
         if (S.board[k] === +id2) { S.board[k] = 0; n--; }
       }
@@ -1165,7 +1348,10 @@
     var afterBuildFx = function () {
       Game.FX.dayTransition(S.day, function () {
         Game.FX.campUp();
-        Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
+        var builtMsg = '\u5EFA\u6210\uFF1A' + st.name + '\uFF01';
+        if (getDayPeriod() === 'night') builtMsg += '\n夜里盖完了——手艺磕绊，却也成了。';
+        else if (getDayPeriod() === 'day') builtMsg += '\n白天好干活。';
+        Game.FX.toast(builtMsg);
         Game.FX.sparkle((Game.canvas ? Game.canvas.width : 375) / 2, 86, '#E8763A', 12);
       });
     };
@@ -1809,6 +1995,12 @@
 
     // V2.0：按本地时刷新主题色（国内即北京时间）
     if (D.applyTheme) D.applyTheme(new Date(now));
+    // V2.0：日夜意外低频 tick（约每 45s 掷一次，内部仍有冷却/日上限）
+    if (!App._dnTickAt) App._dnTickAt = now;
+    if (now - App._dnTickAt > 45000) {
+      App._dnTickAt = now;
+      maybeDayNightIncident('tick');
+    }
 
     // 绘制
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -1855,22 +2047,32 @@
     if (D.applyTheme) D.applyTheme();
     Game.AD.init();
 
-    // 预加载物品手绘图（透明 WebP，失败降级 emoji）
+    // 预加载物品手绘图（透明 WebP；onerror 打标，渲染层降级 emoji+名称）
     Game.assets = {};
+    Game.assetFailed = {};
     var _imgMap = D.ITEM_IMG || {};
     for (var _id in _imgMap) {
-      var _img = wx.createImage();
-      _img.src = 'images/' + _imgMap[_id];
-      Game.assets[_id] = _img;
+      (function (id, src) {
+        var _img = wx.createImage();
+        _img.onload = function () { Game.assetFailed[id] = false; };
+        _img.onerror = function () { Game.assetFailed[id] = true; };
+        _img.src = 'images/' + src;
+        Game.assets[id] = _img;
+      })(_id, _imgMap[_id]);
     }
 
     // 预加载场景背景图（首页/夜海/海滩，失败降级程序渐变）
     Game.bgAssets = {};
+    Game.bgFailed = {};
     var _bgMap = D.BG_IMG || {};
     for (var _bgk in _bgMap) {
-      var _bg = wx.createImage();
-      _bg.src = 'images/' + _bgMap[_bgk];
-      Game.bgAssets[_bgk] = _bg;
+      (function (key, src) {
+        var _bg = wx.createImage();
+        _bg.onload = function () { Game.bgFailed[key] = false; };
+        _bg.onerror = function () { Game.bgFailed[key] = true; };
+        _bg.src = 'images/' + src;
+        Game.bgAssets[key] = _bg;
+      })(_bgk, _bgMap[_bgk]);
     }
 
     // 暴露接口给渲染层
@@ -1968,6 +2170,39 @@
   // V2.0 PR1 主题
   App.getThemeInfo = function () {
     return D.getThemeInfo ? D.getThemeInfo() : { id: 'A', name: '羊皮纸绘本' };
+  };
+  App.getDayPeriod = getDayPeriod;
+  App.getEffectiveNeed = getEffectiveNeed;
+  App.periodBuildTip = periodBuildTip;
+  App.isAssetOk = function (id) {
+    var a = Game.assets && Game.assets[id];
+    if (!a || Game.assetFailed && Game.assetFailed[id]) return false;
+    return !!(a.complete && a.width);
+  };
+  App.chainTopEm = function (chain) {
+    var best = null, bestLv = -1;
+    for (var i = 0; i < S.space; i++) {
+      var id = S.board[i];
+      var it = id && D.ITEMS[id];
+      if (!it || it.chain !== chain) continue;
+      if (it.lv > bestLv) { bestLv = it.lv; best = it; }
+    }
+    if (best) return best.em;
+    if (chain === 'wood') return '\uD83E\uDEB5';
+    if (chain === 'food') return '\uD83E\uDD65';
+    if (chain === 'stone') return '\uD83E\uDEA8';
+    return '?';
+  };
+  App.mergeHintCount = function () {
+    // 棋盘上有多少种「已达 3 枚同 id、可手拖合成」的提示数
+    var map = {}, id, n = 0;
+    for (var i = 0; i < S.space; i++) {
+      id = S.board[i];
+      if (!id || !D.ITEMS[id] || !D.ITEMS[id].next) continue;
+      map[id] = (map[id] || 0) + 1;
+    }
+    for (id in map) if (map[id] >= 3) n++;
+    return n;
   };
   App.getNotchInfo = function () {
     return {

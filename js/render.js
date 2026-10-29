@@ -49,9 +49,40 @@
   }
   // 场景背景：已加载则铺图，否则返回 false（调用方降级为程序渐变）
   function drawSceneBg(ctx, key, W, H) {
+    if (Game.bgFailed && Game.bgFailed[key]) return false;
     var img = Game.bgAssets && Game.bgAssets[key];
     if (img && img.complete && img.width) { drawCover(ctx, img, W, H); return true; }
     return false;
+  }
+
+  /** 绘制物品图标：手绘 WebP 优先，失败/未就绪 → emoji；可选小字名称 */
+  function drawItemVisual(ctx, id, cx, cy, bw, bh, opt) {
+    opt = opt || {};
+    var it = Game.DATA.ITEMS[id];
+    if (!it) return;
+    var ok = Game.App && Game.App.isAssetOk ? Game.App.isAssetOk(id) : false;
+    if (!ok) {
+      var a = Game.assets && Game.assets[id];
+      ok = !!(a && a.complete && a.width && !(Game.assetFailed && Game.assetFailed[id]));
+    }
+    if (ok) {
+      var img = Game.assets[id];
+      var pad = bw * 0.12;
+      ctx.drawImage(img, cx + pad, cy + pad, bw - pad * 2, bh - pad * 2);
+    } else {
+      // 精致兜底：居中 emoji + 底部短名
+      ctx.font = (bh * (opt.showName ? 0.48 : 0.6)) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = Game.DATA.C.ink;
+      ctx.fillText(it.em, cx + bw / 2, cy + bh / 2 - (opt.showName ? 4 : 2));
+      if (opt.showName) {
+        ctx.font = '8px sans-serif';
+        ctx.fillStyle = Game.DATA.C.wood;
+        var nm = it.name.length > 4 ? it.name.slice(0, 4) : it.name;
+        ctx.fillText(nm, cx + bw / 2, cy + bh - 7);
+      }
+    }
   }
 
   // 简单按钮绘制（支持按压下沉效果：按中时 y+2）
@@ -550,10 +581,14 @@
     // V1.9: 统计逻辑本身正确（countChain 每帧实时统计棋盘内该链物品总数）
     // 注意：① 该数字是「链总量」，建造消耗的是具体物品（如浮木×3），以建造页缺口为准；②「食物」=食物物品数，与顶栏饱食度(🍖 x/10)是两套概念
     // 增强：点击资源条 → 跳到建造页对照缺口
+    var mergeN = Game.App.mergeHintCount ? Game.App.mergeHintCount() : 0;
+    var woodEm = Game.App.chainTopEm ? Game.App.chainTopEm('wood') : '\uD83E\uDEB5';
+    var foodEm = Game.App.chainTopEm ? Game.App.chainTopEm('food') : '\uD83E\uDD65';
+    var stoneEm = Game.App.chainTopEm ? Game.App.chainTopEm('stone') : '\uD83E\uDEA8';
     var resData = [
-      ['\uD83E\uDEB5 木材', Game.App.countChain('wood'), C.fire],
-      ['\uD83E\uDD65 食物', Game.App.countChain('food'), C.fire],
-      ['\uD83E\uDEA8 石料', Game.App.countChain('stone'), C.fire]
+      [woodEm + ' 木材', Game.App.countChain('wood'), C.fire, 'wood'],
+      [foodEm + ' 食物', Game.App.countChain('food'), C.fire, 'food'],
+      [stoneEm + ' 石料', Game.App.countChain('stone'), C.fire, 'stone']
     ];
     var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = 106;
     for (var i = 0; i < 3; i++) {
@@ -566,15 +601,17 @@
       roundRect(ctx, rx, ry, rw, 34, 8);
       ctx.stroke();
       ctx.fillStyle = C.ink;
-      ctx.font = '12px sans-serif';
+      ctx.font = '11px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(resData[i][0], rx + 8, ry + 17);
+      ctx.fillText(resData[i][0], rx + 6, ry + 12);
+      ctx.fillStyle = C.wood;
+      ctx.font = '8px sans-serif';
+      ctx.fillText('链合计', rx + 6, ry + 25);
       ctx.fillStyle = resData[i][2];
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(String(resData[i][1]), rx + rw - 8, ry + 17);
-      // V1.9增强: 点击资源条跳到建造页（快速对照各节点具体缺口）
       hit(rx, ry, rw, 34, (function () { return function () { Game.App.switchTab('camp'); }; })());
     }
 
@@ -664,26 +701,32 @@
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.stroke();
         if (isPartner) {
-          // 磁吸高亮光晕
           ctx.fillStyle = 'rgba(232,118,58,0.22)';
           roundRect(ctx, cx - 2, cy - 2, bw2 + 4, bh2 + 4, 8);
           ctx.fill();
         }
-        var _a = Game.assets && Game.assets[showId];
-        if (_a && _a.complete && _a.width) {
-          var _pad = bw2 * 0.12;
-          ctx.drawImage(_a, cx + _pad, cy + _pad, bw2 - _pad * 2, bh2 - _pad * 2);
-        } else {
-          ctx.font = (bh2 * 0.6) + 'px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = C.ink;
-          ctx.fillText(it.em, cx + bw2 / 2, cy + bh2 / 2 - 2);
-        }
+        var useFallbackName = !(Game.App && Game.App.isAssetOk && Game.App.isAssetOk(showId));
+        drawItemVisual(ctx, showId, cx, cy, bw2, bh2, { showName: useFallbackName });
         ctx.font = '8px sans-serif';
         ctx.fillStyle = C.wood;
         ctx.textAlign = 'right';
         ctx.fillText('Lv' + it.lv, cx + bw2 - 3, cy + bh2 - 3);
+        // 可合成角标：同 id 达到 3 且有 next
+        if (it.next && Game.S) {
+          var same = 0;
+          for (var si = 0; si < Game.S.space; si++) if (Game.S.board[si] === showId) same++;
+          if (same >= 3) {
+            ctx.fillStyle = C.fire;
+            ctx.beginPath();
+            ctx.arc(cx + 7, cy + 7, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 7px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('3', cx + 7, cy + 7);
+          }
+        }
       } else {
         ctx.fillStyle = C.emptyFill || C.paper;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
@@ -712,18 +755,25 @@
       ctx.lineWidth = 2.5;
       roundRect(ctx, fx, fy, fw, fh, 7);
       ctx.stroke();
-      var _da = Game.assets && Game.assets[d.id];
-      if (_da && _da.complete && _da.width) {
-        var _dp = fw * 0.12;
-        ctx.drawImage(_da, fx + _dp, fy + _dp, fw - _dp * 2, fh - _dp * 2);
-      } else if (dit) {
-        ctx.font = (fh * 0.55) + 'px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = C.ink;
-        ctx.fillText(dit.em, d.x, d.y - 2);
-      }
+      drawItemVisual(ctx, d.id, fx, fy, fw, fh, { showName: false });
       ctx.restore();
+    }
+    // 空棋盘 / 可三合引导（画在面板剪裁内）
+    if (used === 0 && !(Game.drag && Game.drag.id)) {
+      ctx.fillStyle = C.wood;
+      ctx.globalAlpha = 0.9;
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('棋盘还空着 · 点下方「采集」获取物资', W / 2, py + ph * 0.45);
+      ctx.font = '10px sans-serif';
+      ctx.fillText('三枚相同物品可拖近合成升级', W / 2, py + ph * 0.45 + 18);
+      ctx.globalAlpha = 1;
+    } else if (mergeN > 0 && !(Game.drag && Game.drag.id)) {
+      ctx.fillStyle = C.fire;
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u2728 有 ' + mergeN + ' 种可三合：拖近同物后松手', W / 2, py + ph - 10);
     }
     ctx.restore(); // 结束剪裁
 
@@ -833,7 +883,12 @@
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('\uD83C\uDFD7\uFE0F 建造', W / 2, 18); // V1.11: 原为 🚀（火箭），与「建造」语义不符
+    ctx.fillText('\uD83C\uDFD7\uFE0F 建造', W / 2, 16);
+    if (Game.App.periodBuildTip) {
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = C.fire;
+      ctx.fillText(Game.App.periodBuildTip(), W / 2, 30);
+    }
 
     // V1.4: 显示被封锁的分支
     if (S.lockedTrees && S.lockedTrees.length > 0) {
@@ -845,10 +900,10 @@
       }).join('、');
       ctx.fillStyle = '#FF6B6B';
       ctx.font = '9px sans-serif';
-      ctx.fillText('\uD83D\uDD12 本周目封锁：' + lockedNames, W / 2, 32);
+      ctx.fillText('\uD83D\uDD12 本周目封锁：' + lockedNames, W / 2, 42);
     }
 
-    var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 48 : 36;
+    var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 54 : 42;
 
     // 遍历所有科技树节点，以列表形式展示（V1.6: 支持滚动）
     // V1.11: 去掉此处原有的 `var y = startY;`（后续在裁剪块内重新声明，属死代码）
@@ -963,18 +1018,22 @@
           // 资源需求
           var nx = 20;
           var hasAllRes = true;
-          for (var id in node.need) {
+          var needMap = Game.App.getEffectiveNeed ? Game.App.getEffectiveNeed(node.need) : node.need;
+          for (var id in needMap) {
             var have = Game.App.countItem(+id);
-            var need = node.need[id];
+            var need = needMap[id];
+            var rawNeed = node.need[id];
             var ok = have >= need;
             if (!ok) hasAllRes = false;
-            var label = Game.DATA.ITEMS[id].em + have + '/' + need;
+            var itn = Game.DATA.ITEMS[id];
+            var label = (itn ? itn.em : '') + have + '/' + need;
+            if (rawNeed !== need) label += (need < rawNeed ? '\u2193' : '\u2191');
+            ctx.font = '9px sans-serif';
             var pw = ctx.measureText(label).width + 10;
             ctx.fillStyle = ok ? C.okGreen : C.paper2;
             roundRect(ctx, nx, oy + 42, pw, 16, 4);
             ctx.fill();
             ctx.fillStyle = C.ink;
-            ctx.font = '9px sans-serif';
             ctx.fillText(label, nx + 4, oy + 53);
             nx += pw + 4;
           }
