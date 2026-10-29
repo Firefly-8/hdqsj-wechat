@@ -185,6 +185,170 @@
     }
     return D.WEATHER[0];
   }
+  // V2.0：日夜时段 + 建造需求偏置
+  function getDayPeriod() {
+    return D.getDayPeriod ? D.getDayPeriod() : 'day';
+  }
+  function getEffectiveNeed(needMap) {
+    var period = getDayPeriod();
+    var mul = D.getBuildCostMul ? D.getBuildCostMul() : 1;
+    var out = {};
+    for (var id in needMap) {
+      var raw = needMap[id];
+      out[id] = D.scaleBuildNeed ? D.scaleBuildNeed(raw, mul, period) : raw;
+    }
+    return out;
+  }
+  function periodBuildTip() {
+    var p = getDayPeriod();
+    if (p === 'day') return '白天好干活：材料需求略减';
+    if (p === 'night') return '天黑了，天亮再盖更稳（夜间材料略增，仍可建造）';
+    return '傍晚光线渐暗，建造按常规消耗';
+  }
+
+  // V2.0：日夜偶发意外（克制：每天最多 3 次，冷却 10 分钟）
+  var DN_COOLDOWN_MS = 10 * 60 * 1000;
+  var DN_MAX_PER_DAY = 3;
+  function pickDnIncident(period) {
+    var list = D.DAYNIGHT_INCIDENTS || [];
+    var pool = [], total = 0, i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].period !== period) continue;
+      pool.push(list[i]);
+      total += list[i].weight || 1;
+    }
+    if (!pool.length) return null;
+    var r = Math.random() * total, c = 0;
+    for (i = 0; i < pool.length; i++) {
+      c += pool[i].weight || 1;
+      if (r < c) return pool[i];
+    }
+    return pool[0];
+  }
+  function applyDnEffect(eff) {
+    if (!eff || eff.type === 'none') return;
+    if (eff.type === 'energy') {
+      var a = eff.amount || 0;
+      if (a > 0) S.energy = Math.min(effectiveMaxEnergy(), S.energy + a);
+      else S.energy = Math.max(0, S.energy + a);
+    } else if (eff.type === 'food') {
+      var f = eff.amount || 0;
+      S.food = Math.max(0, Math.min(S.maxFood, (S.food || 0) + f));
+    } else if (eff.type === 'gain') {
+      var ids = eff.ids || [];
+      for (var g = 0; g < ids.length; g++) {
+        var p = firstEmpty();
+        if (p < 0) { Game.FX.toast('棋盘满了，这次意外收获没地方放'); break; }
+        S.board[p] = ids[g];
+      }
+      notifyIfNewReady();
+    } else if (eff.type === 'lose_l1') {
+      var left = eff.amount || 1;
+      var lost = 0;
+      for (var li = S.space - 1; li >= 0 && left > 0; li--) {
+        var v = S.board[li];
+        if (v === 1 || v === 11 || v === 21) {
+          S.board[li] = 0; left--; lost++;
+        }
+      }
+      if (lost === 0) Game.FX.toast('篓子里没什么可掉的，虚惊一场');
+    }
+    save();
+  }
+  function runDnIncident(inc) {
+    if (!inc) return;
+    S._dnLastTs = Date.now();
+    S._dnCount = (S._dnCount || 0) + 1;
+    save();
+    if (inc.kind === 'modal') {
+      openModal({
+        title: inc.title,
+        body: inc.body,
+        buttons: (inc.options || []).map(function (opt) {
+          return {
+            label: opt.label,
+            primary: !!opt.primary,
+            cb: (function (cb) {
+              return function () {
+                closeModal();
+                handleDnChoice(cb);
+              };
+            })(opt.cb)
+          };
+        })
+      });
+      return;
+    }
+    applyDnEffect(inc.effect);
+    Game.FX.toast((inc.title ? (inc.title + '\n') : '') + (inc.text || ''), 2400);
+  }
+  function handleDnChoice(cb) {
+    if (cb === 'dn_beast_safe') {
+      var def = getDefenseLevel();
+      if (def >= 3) {
+        Game.FX.toast('箭塔夜里也醒着，野兽没讨到便宜。无损。');
+      } else if (countItem(1) >= 1) {
+        for (var i = S.space - 1; i >= 0; i--) {
+          if (S.board[i] === 1) { S.board[i] = 0; break; }
+        }
+        Game.FX.toast('你用 1 浮木堵上缺口，听着外面的脚步渐渐远了。');
+      } else {
+        S.energy = Math.max(0, S.energy - 1);
+        Game.FX.toast('没有浮木可挡，你攥着火把熬过半夜。体力 -1');
+      }
+      save();
+    } else if (cb === 'dn_beast_risk') {
+      var defR = getDefenseLevel();
+      var win = Math.random() < (0.4 + defR * 0.15);
+      if (win) {
+        var got = 0;
+        for (var k = 0; k < 2; k++) {
+          var p = firstEmpty();
+          if (p < 0) break;
+          S.board[p] = D.L1[Math.floor(Math.random() * 3)];
+          got++;
+        }
+        notifyIfNewReady();
+        Game.FX.toast(got > 0
+          ? ('你唬退了它，还捡回 ' + got + ' 件物资。夜里险中有赚。')
+          : '唬退了它，可棋盘已满，战利品装不下。');
+      } else {
+        var loseN = defR >= 1 ? 1 : 2;
+        var lost = 0;
+        for (var j = S.space - 1; j >= 0 && lost < loseN; j--) {
+          if (S.board[j]) { S.board[j] = 0; lost++; }
+        }
+        S.food = Math.max(0, (S.food || 0) - 1);
+        Game.FX.toast('它冲散了你的存货。损失 ' + lost + ' 件物资，饱食 -1');
+      }
+      save();
+    } else if (cb === 'dn_beast_hide') {
+      Game.FX.toast('你缩进棚里，屏住呼吸。天亮时栅栏还在，只是一夜没睡好。\n体力未扣，但天亮前不宜再冒险采集。');
+      S._dnGatherBlockUntil = Date.now() + 3 * 60 * 1000; // 3 分钟内采集被劝退
+      save();
+    }
+  }
+  function maybeDayNightIncident(source) {
+    if (!S || Game.scene !== 'game' || Game.modal) return false;
+    if (S.day < 2) return false;
+    if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return false;
+    if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return false;
+    var today = new Date().toDateString();
+    if (S._dnDate !== today) { S._dnDate = today; S._dnCount = 0; }
+    if ((S._dnCount || 0) >= DN_MAX_PER_DAY) return false;
+    var now = Date.now();
+    if (S._dnLastTs && now - S._dnLastTs < DN_COOLDOWN_MS) return false;
+    var period = getDayPeriod();
+    var chance = period === 'day' ? 0.10 : (period === 'dusk' ? 0.20 : 0.24);
+    if (source === 'tick') chance *= 0.25;
+    if (source === 'bottle') chance *= 0.6;
+    if (Math.random() > chance) return false;
+    var inc = pickDnIncident(period);
+    if (!inc) return false;
+    runDnIncident(inc);
+    return true;
+  }
+
   // V1.12: 原著细节事件池（一次性，按天数控时出现）
   function loreEventPool() {
     var out = [];
@@ -661,8 +825,9 @@
         if (S.stages.indexOf(st.id) >= 0) continue;
         if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
         var can = true;
-        for (var id in st.need) {
-          if (countItem(+id) < st.need[id]) { can = false; break; }
+        var needMap = getEffectiveNeed(st.need);
+        for (var id in needMap) {
+          if (countItem(+id) < needMap[id]) { can = false; break; }
         }
         if (can) ids.push(st.id);
       }
@@ -707,9 +872,10 @@
         if (st.prev && S.stages.indexOf(st.prev) < 0) continue;
         var short = [];
         var can = true;
-        for (var id in st.need) {
+        var needMap = getEffectiveNeed(st.need);
+        for (var id in needMap) {
           var have = countItem(+id);
-          var need = st.need[id];
+          var need = needMap[id];
           if (have < need) {
             can = false;
             short.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + '\u00D7' + (need - have));
@@ -720,8 +886,8 @@
           : ('下一目标：' + st.name + '，还差 ' + short.slice(0, 3).join('\u3001'));
         if (!can && short.length) {
           var hintZone = '';
-          for (var id2 in st.need) {
-            if (countItem(+id2) >= st.need[id2]) continue;
+          for (var id2 in needMap) {
+            if (countItem(+id2) >= needMap[id2]) continue;
             var chain = D.ITEMS[+id2] && D.ITEMS[+id2].chain;
             if (chain === 'wood') { hintZone = '岸边'; break; }
             if (chain === 'food') { hintZone = '林中'; break; }
@@ -880,8 +1046,8 @@
       Game.FX.floaty(z.em + D.ITEMS[result.id].em + bonus, cx, cy);
     }
     if (!mergeAnim[pos]) mergeAnim[pos] = 0.35;
-    setTimeout(function () { autoMerge(); }, 120);
     save();
+    notifyIfNewReady();
   }
 
   // V1.18b: 采集地点常驻 —— 默认岸边；点采集直接采；菜单改地点后一直生效
@@ -930,6 +1096,18 @@
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
     if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; }
+    // V2.0：夜间偶发「先别采」劝退（野兽藏过后短时）
+    if (S._dnGatherBlockUntil && Date.now() < S._dnGatherBlockUntil) {
+      Game.FX.toast('夜里刚受过惊，先守在营地。\n过几分钟再出门更稳。');
+      return;
+    }
+    // 夜间小概率出门即被吓回（不扣体力，有明确提示）
+    if (getDayPeriod() === 'night' && Math.random() < 0.08) {
+      Game.FX.toast('\uD83D\uDC3B 林子里两点绿光一闪，你缩了回来。\n今夜采集暂缓——体力未扣。');
+      S._dnLastTs = Date.now();
+      save();
+      return;
+    }
     var pos = firstEmpty();
     if (pos < 0) { emptyLine('full'); return; }
 
@@ -958,35 +1136,98 @@
         if (z.id === 'shore') maybeShoreFlotsam();
       }
       save();
+      // 采集后小概率触发日夜意外（有冷却，不刷屏）
+      setTimeout(function () { maybeDayNightIncident('gather'); }, 400);
     });
   }
 
-  // ============ 自动合并（3合1 连锁 + pop 弹跳 + 粒子） ============
+  // ============ V2.0 PR1：手拖三合（关掉全自动三合主路径） ============
+  // 玩家拖起一枚有物格，靠近另两枚同 id 时磁吸高亮；松手凑齐 3 个 → 留一格升 next、清另两格
   var mergeAnim = {};
-  function autoMerge() {
-    var merged = false;
-    for (var id in D.ITEMS) {
-      var it = D.ITEMS[id];
-      if (!it.next) continue;
-      var idxs = [];
-      for (var i = 0; i < S.space; i++) if (S.board[i] === +id) idxs.push(i);
-      if (idxs.length >= 3) {
-        var keep = idxs[0];
-        var next = it.next;
-        S.board[keep] = next;
-        S.board[idxs[1]] = 0;
-        S.board[idxs[2]] = 0;
-        // pop 弹跳动画（对应 .cell.merge）+ 粒子
-        mergeAnim[keep] = 0.35;
-        var r = getCellRect(keep);
-        Game.FX.sparkle(r.x + r.w / 2, r.y + r.h / 2, D.C.fire, 10);
-        Game.FX.floaty('\u2728' + D.ITEMS[next].em, r.x + r.w / 2, r.y - 8);
-        Game.FX.toast(it.name + '\u00D73 \u2192 ' + D.ITEMS[next].name + '\uFF01');
-        merged = true;
-      }
+  var MAGNET_R = 92; // 磁吸半径（逻辑像素）
+  var dragState = null; // { from, id, x, y, partners: [i,j] }
+
+  function clearDrag() {
+    dragState = null;
+    Game.drag = null;
+  }
+
+  function findMergePartners(fromIdx, itemId, fingerX, fingerY) {
+    var it = D.ITEMS[itemId];
+    if (!it || !it.next) return [];
+    var cands = [];
+    for (var i = 0; i < S.space; i++) {
+      if (i === fromIdx) continue;
+      if (S.board[i] !== itemId) continue;
+      var r = getCellRect(i);
+      var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      var dx = fingerX - cx, dy = fingerY - cy;
+      cands.push({ i: i, dist: Math.sqrt(dx * dx + dy * dy) });
     }
-    if (merged) { autoMerge(); return; } // 连锁
+    cands.sort(function (a, b) { return a.dist - b.dist; });
+    var out = [];
+    for (var k = 0; k < cands.length && out.length < 2; k++) {
+      if (cands[k].dist <= MAGNET_R) out.push(cands[k].i);
+    }
+    return out;
+  }
+
+  function hitTestBoardCell(px, py) {
+    if (Game.scene !== 'game' || Game.tab !== 'board') return -1;
+    var py0 = 148, ph = H - 148 - 118;
+    if (px < 10 || px > W - 10 || py < py0 || py > py0 + ph) return -1;
+    for (var i = 0; i < S.space; i++) {
+      var r = getCellRect(i);
+      if (py < r.y || py > r.y + r.h) continue; // 粗略跳过不可见
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  /** 执行一次三合：keep 升 next，清 a/b；toast「A×3 → B」+ 橙粒子/弹跳 */
+  function mergeThree(keep, a, b) {
+    var id = (dragState && dragState.id) || S.board[keep] || S.board[a] || S.board[b];
+    var it = D.ITEMS[id];
+    if (!it || !it.next) return false;
+    // 拖起期间 board[from] 仍保留原值，三格应同 id
+    if (S.board[keep] !== id || S.board[a] !== id || S.board[b] !== id) return false;
+    var next = it.next;
+    S.board[keep] = next;
+    S.board[a] = 0;
+    S.board[b] = 0;
+    mergeAnim[keep] = 0.35;
+    var r = getCellRect(keep);
+    Game.FX.sparkle(r.x + r.w / 2, r.y + r.h / 2, D.C.fire, 10);
+    Game.FX.floaty('\u2728' + D.ITEMS[next].em, r.x + r.w / 2, r.y - 8);
+    Game.FX.toast(it.name + '\u00D73 \u2192 ' + D.ITEMS[next].name);
     save();
+    notifyIfNewReady();
+    return true;
+  }
+
+  function updateDragAt(px, py) {
+    if (!dragState) return;
+    dragState.x = px;
+    dragState.y = py;
+    dragState.partners = findMergePartners(dragState.from, dragState.id, px, py);
+    Game.drag = dragState;
+  }
+
+  function tryCommitDrag() {
+    if (!dragState) return;
+    var from = dragState.from;
+    var partners = dragState.partners || [];
+    if (partners.length >= 2) {
+      // 留靠近落点的一枚升 next，清拖源与另一枚
+      var keep = partners[0];
+      var other = partners[1];
+      mergeThree(keep, from, other);
+    }
+    clearDrag();
+  }
+
+  // 兼容旧调用点：全自动三合已关闭，改为空操作（仅提醒可建造）
+  function autoMerge() {
     notifyIfNewReady();
   }
 
@@ -1045,19 +1286,22 @@
     }
     // V1.13 原著彩蛋：原文里他自嘲「既是个蹩脚的木工，也是个蹩脚的裁缝」
     // 把单调的「资源不足」换成带自嘲的口吻，但保留「还差什么」的信息量
+    var effNeed = getEffectiveNeed(st.need);
+    var period = getDayPeriod();
     var shortList = [];
-    for (var id in st.need) {
-      if (countItem(+id) < st.need[id]) {
-        shortList.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + ' \u00D7' + (st.need[id] - countItem(+id)));
+    for (var id in effNeed) {
+      if (countItem(+id) < effNeed[id]) {
+        shortList.push((D.ITEMS[+id] ? D.ITEMS[+id].name : id) + ' \u00D7' + (effNeed[id] - countItem(+id)));
       }
     }
     if (shortList.length > 0) {
       var sorry = D.SORRY_LINES[Math.floor(Math.random() * D.SORRY_LINES.length)];
-      Game.FX.toast(sorry + '\n还差：' + shortList.join('\u3001'));
+      var biasTip = period === 'night' ? '\n（夜里费料，天亮再盖更稳）' : (period === 'day' ? '\n（白天好干活，需求已略减）' : '');
+      Game.FX.toast(sorry + '\n还差：' + shortList.join('\u3001') + biasTip);
       return;
     }
-    for (var id2 in st.need) {
-      var n = st.need[id2];
+    for (var id2 in effNeed) {
+      var n = effNeed[id2];
       for (var k = S.space - 1; k >= 0 && n > 0; k--) {
         if (S.board[k] === +id2) { S.board[k] = 0; n--; }
       }
@@ -1104,7 +1348,10 @@
     var afterBuildFx = function () {
       Game.FX.dayTransition(S.day, function () {
         Game.FX.campUp();
-        Game.FX.toast('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
+        var builtMsg = '\u5EFA\u6210\uFF1A' + st.name + '\uFF01';
+        if (getDayPeriod() === 'night') builtMsg += '\n夜里盖完了——手艺磕绊，却也成了。';
+        else if (getDayPeriod() === 'day') builtMsg += '\n白天好干活。';
+        Game.FX.toast(builtMsg);
         Game.FX.sparkle((Game.canvas ? Game.canvas.width : 375) / 2, 86, '#E8763A', 12);
       });
     };
@@ -1553,14 +1800,14 @@
     if (cb) cb();
   }
 
-  // ============ 触摸 + 滚动 ============
+  // ============ 触摸 + 滚动 + 手拖三合 ============
   var pendingHit = null;
   var scrollTouchStartY = null;
   var scrollTouchStartScrollY = null;
   var campScrollMoved = false;
 
   function touchPos(e) {
-    var t = e.touches && e.touches[0];
+    var t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
     if (!t) return null;
     return { x: t.clientX * (LOGICAL_W / W_RAW), y: t.clientY * (LOGICAL_W / W_RAW) };
   }
@@ -1569,7 +1816,6 @@
     if (!p) return;
     // 弹窗优先
     if (modal) {
-      // 命中弹窗按钮
       for (var i = Game.hits.length - 1; i >= 0; i--) {
         var h = Game.hits[i];
         if (p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h) {
@@ -1582,13 +1828,28 @@
       pressedRect = null;
       return;
     }
-    // CG 场景任意点击跳过
     if (Game.scene === 'cg') {
       pendingHit = { cb: skipCG };
       pressedRect = null;
       return;
     }
-    // 棋盘面板区域（4列滚动）检测滑动
+    // V2.0：棋盘上拖有物格 = 手拖三合；点空白才滚动
+    if (Game.scene === 'game' && Game.tab === 'board') {
+      var cellIdx = hitTestBoardCell(p.x, p.y);
+      if (cellIdx >= 0 && S.board[cellIdx]) {
+        var itemId = S.board[cellIdx];
+        var it0 = D.ITEMS[itemId];
+        if (it0 && it0.next) {
+          dragState = { from: cellIdx, id: itemId, x: p.x, y: p.y, partners: [] };
+          Game.drag = dragState;
+          scrollTouchStartY = null;
+          pendingHit = null;
+          pressedRect = null;
+          return;
+        }
+        // 满级不可合：仍允许滚动，不当拖合
+      }
+    }
     var py = 148, ph = H - 148 - 118;
     var inScroll = false;
     if (Game.scene === 'game' && Game.tab === 'board' && p.x >= 10 && p.x <= W - 10 && p.y >= py && p.y <= py + ph) {
@@ -1596,19 +1857,16 @@
       scrollTouchStartScrollY = Game.boardScrollY || 0;
       inScroll = true;
     } else if (Game.scene === 'game' && Game.tab === 'camp' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
-      // V1.6: 建造页滚动检测
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.campScrollY || 0;
       campScrollMoved = false;
       inScroll = true;
     } else if (Game.scene === 'game' && Game.tab === 'log' && p.x >= 10 && p.x <= W - 10 && p.y >= 36 && p.y <= H - 34) {
-      // V1.8: 日记页滚动检测
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.logScrollY || 0;
       inScroll = true;
     }
     if (!inScroll) scrollTouchStartY = null;
-    // 正常场景：逆序命中（上层优先）
     for (var j = Game.hits.length - 1; j >= 0; j--) {
       var hj = Game.hits[j];
       if (p.x >= hj.x && p.x <= hj.x + hj.w && p.y >= hj.y && p.y <= hj.y + hj.h) {
@@ -1621,7 +1879,15 @@
     pressedRect = null;
   }
   function onTouchEnd(e) {
-    // 处理滚动手势：建造页需区分点击与滑动，棋盘页沿用原逻辑
+    if (dragState) {
+      var pEnd = touchPos(e);
+      if (pEnd) updateDragAt(pEnd.x, pEnd.y);
+      tryCommitDrag();
+      pendingHit = null;
+      pressedRect = null;
+      scrollTouchStartY = null;
+      return;
+    }
     if (scrollTouchStartY !== null) {
       var wasCamp = (Game.scene === 'game' && Game.tab === 'camp');
       scrollTouchStartY = null;
@@ -1635,46 +1901,47 @@
         campScrollMoved = false;
         return;
       }
-      return; // 棋盘：拖动不触发点击
+      return;
     }
     if (pendingHit) {
-      var cb = pendingHit.cb;
+      var cb2 = pendingHit.cb;
       pendingHit = null;
       pressedRect = null;
-      if (cb) cb();
+      if (cb2) cb2();
     } else {
       pressedRect = null;
     }
   }
-  // 触摸移动：处理棋盘 / 建造页滚动
   function onTouchMove(e) {
-    if (scrollTouchStartY === null || Game.scene !== 'game') return;
     var p = touchPos(e);
     if (!p) return;
+    if (dragState) {
+      updateDragAt(p.x, p.y);
+      return;
+    }
+    if (scrollTouchStartY === null || Game.scene !== 'game') return;
     if (Game.tab === 'board') {
-      var dy = scrollTouchStartY - p.y; // 手指上滑为正
-      var scrollDelta = dy * 1.5; // 滚动系数
+      var dy = scrollTouchStartY - p.y;
+      var scrollDelta = dy * 1.5;
       var newScrollY = scrollTouchStartScrollY + scrollDelta;
-      // 计算最大滚动值
       var cols = 4, cellGap = 12, bh2 = 52;
       var totalRows = Math.ceil(S.space / cols);
       var maxScroll = Math.max(0, totalRows * (bh2 + cellGap) - (H - 148 - 118 - 26));
       newScrollY = Math.max(0, Math.min(maxScroll, newScrollY));
       Game.boardScrollY = newScrollY;
     } else if (Game.tab === 'camp') {
-      // V1.6: 建造页滚动（区分点击与滑动）
       var cdy = scrollTouchStartY - p.y;
       if (Math.abs(cdy) > 6) campScrollMoved = true;
       var maxCamp = Game.campMaxScroll || 0;
       Game.campScrollY = Math.max(0, Math.min(maxCamp, scrollTouchStartScrollY + cdy * 1.5));
     } else if (Game.tab === 'log') {
-      // V1.8: 日记页滚动
       var ldy = scrollTouchStartY - p.y;
       var maxLog = Game.logMaxScroll || 0;
       Game.logScrollY = Math.max(0, Math.min(maxLog, scrollTouchStartScrollY + ldy * 1.5));
     }
   }
   function onTouchCancel() {
+    if (dragState) clearDrag();
     pendingHit = null;
     pressedRect = null;
     scrollTouchStartY = null;
@@ -1726,6 +1993,15 @@
     }
     tryTickEnergy();
 
+    // V2.0：按本地时刷新主题色（国内即北京时间）
+    if (D.applyTheme) D.applyTheme(new Date(now));
+    // V2.0：日夜意外低频 tick（约每 45s 掷一次，内部仍有冷却/日上限）
+    if (!App._dnTickAt) App._dnTickAt = now;
+    if (now - App._dnTickAt > 45000) {
+      App._dnTickAt = now;
+      maybeDayNightIncident('tick');
+    }
+
     // 绘制
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     Game.Render.render(ctx, W, H, now / 1000);
@@ -1767,24 +2043,36 @@
     Game.modal = null;
     Game.cg = null;
     Game.mergeAnim = mergeAnim;
+    Game.drag = null;
+    if (D.applyTheme) D.applyTheme();
     Game.AD.init();
 
-    // 预加载物品手绘图（透明 WebP，失败降级 emoji）
+    // 预加载物品手绘图（透明 WebP；onerror 打标，渲染层降级 emoji+名称）
     Game.assets = {};
+    Game.assetFailed = {};
     var _imgMap = D.ITEM_IMG || {};
     for (var _id in _imgMap) {
-      var _img = wx.createImage();
-      _img.src = 'images/' + _imgMap[_id];
-      Game.assets[_id] = _img;
+      (function (id, src) {
+        var _img = wx.createImage();
+        _img.onload = function () { Game.assetFailed[id] = false; };
+        _img.onerror = function () { Game.assetFailed[id] = true; };
+        _img.src = 'images/' + src;
+        Game.assets[id] = _img;
+      })(_id, _imgMap[_id]);
     }
 
     // 预加载场景背景图（首页/夜海/海滩，失败降级程序渐变）
     Game.bgAssets = {};
+    Game.bgFailed = {};
     var _bgMap = D.BG_IMG || {};
     for (var _bgk in _bgMap) {
-      var _bg = wx.createImage();
-      _bg.src = 'images/' + _bgMap[_bgk];
-      Game.bgAssets[_bgk] = _bg;
+      (function (key, src) {
+        var _bg = wx.createImage();
+        _bg.onload = function () { Game.bgFailed[key] = false; };
+        _bg.onerror = function () { Game.bgFailed[key] = true; };
+        _bg.src = 'images/' + src;
+        Game.bgAssets[key] = _bg;
+      })(_bgk, _bgMap[_bgk]);
     }
 
     // 暴露接口给渲染层
@@ -1879,6 +2167,53 @@
   App.cookFood = cookFood;
   // V1.12: 原著改编层导出 —— 两季 / 木刻记日 / 鹦鹉 Poll
   App.getSeasonInfo = getSeasonInfo;
+  // V2.0 PR1 主题
+  App.getThemeInfo = function () {
+    return D.getThemeInfo ? D.getThemeInfo() : { id: 'A', name: '羊皮纸绘本' };
+  };
+  App.getDayPeriod = getDayPeriod;
+  App.getEffectiveNeed = getEffectiveNeed;
+  App.periodBuildTip = periodBuildTip;
+  App.isAssetOk = function (id) {
+    var a = Game.assets && Game.assets[id];
+    if (!a || Game.assetFailed && Game.assetFailed[id]) return false;
+    return !!(a.complete && a.width);
+  };
+  // 链顶阶物品 id（棋盘最高阶；空则回落该链顶级图，供 HUD WebP）
+  App.chainTopId = function (chain) {
+    var bestId = 0, bestLv = -1;
+    for (var i = 0; i < S.space; i++) {
+      var id = S.board[i];
+      var it = id && D.ITEMS[id];
+      if (!it || it.chain !== chain) continue;
+      if (it.lv > bestLv) { bestLv = it.lv; bestId = id; }
+    }
+    if (bestId) return bestId;
+    if (chain === 'wood') return 3;
+    if (chain === 'food') return 14;
+    if (chain === 'stone') return 23;
+    return 0;
+  };
+  App.chainTopEm = function (chain) {
+    var id = App.chainTopId(chain);
+    var it = id && D.ITEMS[id];
+    if (it) return it.em;
+    if (chain === 'wood') return '\uD83E\uDEB5';
+    if (chain === 'food') return '\uD83E\uDD65';
+    if (chain === 'stone') return '\uD83E\uDEA8';
+    return '?';
+  };
+  App.mergeHintCount = function () {
+    // 棋盘上有多少种「已达 3 枚同 id、可手拖合成」的提示数
+    var map = {}, id, n = 0;
+    for (var i = 0; i < S.space; i++) {
+      id = S.board[i];
+      if (!id || !D.ITEMS[id] || !D.ITEMS[id].next) continue;
+      map[id] = (map[id] || 0) + 1;
+    }
+    for (id in map) if (map[id] >= 3) n++;
+    return n;
+  };
   App.getNotchInfo = function () {
     return {
       day: S.day,

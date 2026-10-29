@@ -442,6 +442,235 @@
     '材料还差。有的事除了耐心，没有别的办法。'
   ];
 
+
+  // ============ V2.0 PR1：按时段三主题（设备本地时，国内即北京时间） ============
+  // 6:00–16:59 → B 晴空海岛；17:00–19:59 → A 羊皮纸绘本；20:00–5:59 → C 黄昏求生
+  // 主题主要改绘制用色，不改信息架构
+  var THEME_PALETTE_KEYS = [
+    'sea', 'sand', 'wood', 'fire', 'leaf', 'ink', 'paper', 'paper2', 'paper3',
+    'seaDark', 'seaDeep', 'panelBg', 'cellStroke', 'cellFill', 'emptyFill', 'emptyStroke',
+    'topText', 'resBg'
+  ];
+  var THEMES = {
+    A: {
+      id: 'A', name: '羊皮纸绘本',
+      palette: {
+        sea: '#2E7D9A', sand: '#F2D5A0', wood: '#8B5E3C', fire: '#E8763A',
+        leaf: '#6FA860', ink: '#4A3428', paper: '#FAF1DD', paper2: '#E8D6B0', paper3: '#c9b893',
+        seaDark: '#1a3a4a', seaDeep: '#0a2a3a',
+        panelBg: '#FFFFFF', cellStroke: '#8B5E3C', cellFill: '#F2D5A0',
+        emptyFill: '#FAF1DD', emptyStroke: '#c9b893', topText: '#FFFFFF', resBg: '#FFFFFF'
+      }
+    },
+    B: {
+      id: 'B', name: '晴空海岛',
+      palette: {
+        sea: '#3BAFD0', sand: '#F7E8C8', wood: '#6B9E72', fire: '#E8763A',
+        leaf: '#4CAF70', ink: '#1F4A5A', paper: '#F5FBFF', paper2: '#E3F2F7', paper3: '#A8D5C4',
+        seaDark: '#2E8BB0', seaDeep: '#1A6A8A',
+        panelBg: 'rgba(255,255,255,0.92)', cellStroke: '#4CAF70', cellFill: '#F7E8C8',
+        emptyFill: '#F5FBFF', emptyStroke: '#A8D5C4', topText: '#FFFFFF', resBg: 'rgba(255,255,255,0.9)'
+      }
+    },
+    C: {
+      id: 'C', name: '黄昏求生',
+      palette: {
+        sea: '#1a3a4a', sand: '#3a4a42', wood: '#C4A574', fire: '#E8763A',
+        leaf: '#6FA860', ink: '#FAF1DD', paper: '#1e3545', paper2: '#243848', paper3: '#6a7a68',
+        seaDark: '#0a2a3a', seaDeep: '#061820',
+        // 夜主题：面板半透明 + 沙色描边，与手绘 WebP 暖沙协调，避免整屏橙闪
+        panelBg: 'rgba(30,53,69,0.88)', cellStroke: '#C4A574', cellFill: '#3d4f48',
+        emptyFill: 'rgba(21,40,48,0.92)', emptyStroke: '#6a7a68', topText: '#FAF1DD', resBg: 'rgba(36,56,72,0.9)'
+      }
+    }
+  };
+  function themeIdByHour(h) {
+    if (h >= 6 && h < 17) return 'B';
+    if (h >= 17 && h < 20) return 'A';
+    return 'C';
+  }
+  function getThemeInfo(now) {
+    var d = now || new Date();
+    var id = themeIdByHour(d.getHours());
+    return THEMES[id];
+  }
+  // 主题色短过渡（切换时段时 lerp，避免整屏硬切）
+  var THEME_LERP_MS = 750;
+  var _themeLerp = { fromId: null, toId: null, t0: 0, fromPal: null, inited: false };
+
+  function _parseColor(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return { r: 0, g: 0, b: 0, a: 1 };
+    if (s.charAt(0) === '#') {
+      var h = s.slice(1);
+      if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+      return { r: parseInt(h.slice(0, 2), 16) || 0, g: parseInt(h.slice(2, 4), 16) || 0, b: parseInt(h.slice(4, 6), 16) || 0, a: 1 };
+    }
+    var m = s.match(/rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)/i);
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] != null ? +m[4] : 1 };
+    return { r: 0, g: 0, b: 0, a: 1 };
+  }
+  function _fmtColor(c) {
+    var r = Math.round(c.r), g = Math.round(c.g), b = Math.round(c.b);
+    if (c.a < 0.999) {
+      var a = Math.round(c.a * 1000) / 1000;
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+    function hx(n) { var s = n.toString(16); return s.length < 2 ? '0' + s : s; }
+    return '#' + hx(r) + hx(g) + hx(b);
+  }
+  function _lerpColor(a, b, t) {
+    var A = _parseColor(a), B = _parseColor(b);
+    return _fmtColor({
+      r: A.r + (B.r - A.r) * t,
+      g: A.g + (B.g - A.g) * t,
+      b: A.b + (B.b - A.b) * t,
+      a: A.a + (B.a - A.a) * t
+    });
+  }
+  function _snapPalette(pal) {
+    var out = {};
+    for (var i = 0; i < THEME_PALETTE_KEYS.length; i++) {
+      var k = THEME_PALETTE_KEYS[i];
+      if (pal[k] != null) out[k] = pal[k];
+    }
+    return out;
+  }
+  function applyTheme(now) {
+    var d = now instanceof Date ? now : (now ? new Date(now) : new Date());
+    var ms = d.getTime();
+    var t = getThemeInfo(d);
+    if (!_themeLerp.inited) {
+      var p0 = t.palette;
+      for (var i0 = 0; i0 < THEME_PALETTE_KEYS.length; i0++) {
+        var k0 = THEME_PALETTE_KEYS[i0];
+        if (p0[k0] != null) C[k0] = p0[k0];
+      }
+      _themeLerp.fromId = t.id;
+      _themeLerp.toId = t.id;
+      _themeLerp.fromPal = _snapPalette(p0);
+      _themeLerp.t0 = ms;
+      _themeLerp.inited = true;
+      C._themeId = t.id;
+      C._themeName = t.name;
+      C._themeLerpU = 1;
+      return t;
+    }
+    if (t.id !== _themeLerp.toId) {
+      // 从当前已插值色起步，避免二次切换回跳
+      var cur = {};
+      for (var i1 = 0; i1 < THEME_PALETTE_KEYS.length; i1++) {
+        var k1 = THEME_PALETTE_KEYS[i1];
+        cur[k1] = C[k1];
+      }
+      _themeLerp.fromPal = cur;
+      _themeLerp.fromId = _themeLerp.toId;
+      _themeLerp.toId = t.id;
+      _themeLerp.t0 = ms;
+    }
+    var u = 1;
+    if (_themeLerp.fromId !== _themeLerp.toId) {
+      u = Math.min(1, Math.max(0, (ms - _themeLerp.t0) / THEME_LERP_MS));
+      u = u * u * (3 - 2 * u); // smoothstep
+      if (u >= 0.999) {
+        u = 1;
+        _themeLerp.fromId = _themeLerp.toId;
+        _themeLerp.fromPal = _snapPalette(THEMES[_themeLerp.toId].palette);
+      }
+    }
+    var target = THEMES[_themeLerp.toId].palette;
+    var from = _themeLerp.fromPal || target;
+    for (var i = 0; i < THEME_PALETTE_KEYS.length; i++) {
+      var k = THEME_PALETTE_KEYS[i];
+      if (target[k] == null) continue;
+      C[k] = u >= 1 ? target[k] : _lerpColor(from[k] != null ? from[k] : target[k], target[k], u);
+    }
+    C._themeId = t.id;
+    C._themeName = t.name;
+    C._themeLerpU = u;
+    return t;
+  }
+
+  // ============ V2.0：日夜时段 / 建造偏置 / 题材意外 ============
+  // 与主题同一套本地时：day 6–17 / dusk 17–20 / night 20–6
+  function dayPeriodByHour(h) {
+    if (h >= 6 && h < 17) return 'day';
+    if (h >= 17 && h < 20) return 'dusk';
+    return 'night';
+  }
+  function getDayPeriod(now) {
+    var d = now || new Date();
+    return dayPeriodByHour(d.getHours());
+  }
+  // 建造材料倍率：白天略减、夜间略增（整数需求上至少能感到 ±1）
+  var BUILD_COST_MUL = { day: 0.88, dusk: 1.0, night: 1.12 };
+  function scaleBuildNeed(n, mul, period) {
+    n = +n || 0;
+    if (n <= 0) return 0;
+    var out = Math.max(1, Math.round(n * mul));
+    if (period === 'day' && n >= 3 && out >= n) out = n - 1;
+    if (period === 'night' && n >= 2 && out <= n) out = n + 1;
+    return out;
+  }
+  function getBuildCostMul(now) {
+    var p = getDayPeriod(now);
+    return BUILD_COST_MUL[p] || 1;
+  }
+  // 偶发意外（克制频率；文案均带明确得失，禁止无提示扣资源）
+  // kind: toast | modal；effect 由 app 解释
+  var DAYNIGHT_INCIDENTS = [
+    // —— 白天：偏安全 / 小收益 ——
+    { id: 'day_tide', period: 'day', weight: 3, kind: 'toast',
+      title: '退潮的礼物',
+      text: '潮水退下去，沙滩上多了两截能用的浮木。\n（白天采集：浮木 ×1）',
+      effect: { type: 'gain', ids: [1] } },
+    { id: 'day_shade', period: 'day', weight: 2, kind: 'toast',
+      title: '树荫歇脚',
+      text: '你在树荫下坐了一会儿，腿不那么软了。\n体力 +1',
+      effect: { type: 'energy', amount: 1 } },
+    { id: 'day_calm', period: 'day', weight: 2, kind: 'toast',
+      title: '岛上难得安静',
+      text: '风都轻轻的。你把木桩又夯实了一寸——\n白天干活，心里踏实。',
+      effect: { type: 'none' } },
+    // —— 傍晚：轻度意外 ——
+    { id: 'dusk_slip', period: 'dusk', weight: 3, kind: 'toast',
+      title: '暮色绊脚',
+      text: '天色一暗，脚下一滑，篓子里掉出一点东西。\n（丢失 1 件初级物资）',
+      effect: { type: 'lose_l1', amount: 1 } },
+    { id: 'dusk_scare', period: 'dusk', weight: 2, kind: 'toast',
+      title: '林边一声响',
+      text: '灌木丛里「哗」的一声，你手里的火把晃了一下。\n只是野猫。饱食 -1（受了惊吓，不想吃饭）',
+      effect: { type: 'food', amount: -1 } },
+    { id: 'dusk_ember', period: 'dusk', weight: 2, kind: 'toast',
+      title: '余烬还温',
+      text: '傍晚的灶灰里还留着一点热。你烤热了手。\n体力 +1',
+      effect: { type: 'energy', amount: 1 } },
+    // —— 夜间：野兽 / 意外，可损可赚 ——
+    { id: 'night_beast', period: 'night', weight: 3, kind: 'modal',
+      title: '\uD83D\uDC3B 夜里的脚步声',
+      body: '黑暗里有东西在栅栏外转。\n稳守要耗材料；硬拼可能多捞，也可能赔得更惨。',
+      options: [
+        { label: '稳守', primary: true, cb: 'dn_beast_safe' },
+        { label: '冒险', primary: false, cb: 'dn_beast_risk' },
+        { label: '躲进棚里', primary: false, cb: 'dn_beast_hide' }
+      ] },
+    { id: 'night_storm_leak', period: 'night', weight: 2, kind: 'toast',
+      title: '棚顶漏雨',
+      text: '夜里雨从缝里钻进来，潮坏了一点存粮。\n饱食 -2（你把湿了的椰肉扔了）',
+      effect: { type: 'food', amount: -2 } },
+    { id: 'night_loot', period: 'night', weight: 2, kind: 'toast',
+      title: '月下的岸',
+      text: '你提着火把去看潮线，竟捞到半截还能用的木板。\n（获得 木板 ×1）',
+      effect: { type: 'gain', ids: [2] } },
+    { id: 'night_interrupt', period: 'night', weight: 2, kind: 'toast',
+      title: '别往林子里走',
+      text: '远处两点绿光一闪，你缩回营地。\n今晚先别采了。——体力未扣，只是吓了一跳。',
+      effect: { type: 'none' } }
+  ];
+
+  // 启动时先套一次默认主题（按当前本地时）
+  applyTheme();
+
   globalThis.Game = globalThis.Game || {};
   Game.DATA = {
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
@@ -457,6 +686,12 @@
     // V1.13 原著细节扩容
     INK_STAGES: INK_STAGES, SORRY_LINES: SORRY_LINES,
     // V1.19
-    FLOTSAM: FLOTSAM
+    FLOTSAM: FLOTSAM,
+    // V2.0 PR1 主题
+    THEMES: THEMES, themeIdByHour: themeIdByHour, getThemeInfo: getThemeInfo, applyTheme: applyTheme,
+    // V2.0 日夜
+    dayPeriodByHour: dayPeriodByHour, getDayPeriod: getDayPeriod,
+    BUILD_COST_MUL: BUILD_COST_MUL, scaleBuildNeed: scaleBuildNeed, getBuildCostMul: getBuildCostMul,
+    DAYNIGHT_INCIDENTS: DAYNIGHT_INCIDENTS
   };
 })();
