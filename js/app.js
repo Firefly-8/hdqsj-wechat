@@ -1799,12 +1799,14 @@
   }
   // 演示模式广告弹窗（对应网页 openAd）
   App.openAdModal = function (type, onDone) {
+    var body = '（演示模式，模拟真实广告）\n观看完成后可获得奖励。';
+    if (type === 'revive') body = '（演示模式）\n看完激励视频后可在沙滩重生续命。\n探索/建造主循环不插广告。';
     openModal({
       title: '\uD83D\uDCFA \u6FC0\u52B1\u89C6\u9891\u5E7F\u544A', // 激励视频广告
-      body: '（演示模式，模拟真实广告）\n观看完成后可获得奖励。',
+      body: body,
       buttons: [
         { label: '取消', primary: false, cb: function () { closeModal(); } },
-        { label: '观看并领取', primary: true, cb: function () { closeModal(); if (onDone) onDone(); } }
+        { label: type === 'revive' ? '观看并重生' : '观看并领取', primary: true, cb: function () { closeModal(); if (onDone) onDone(); } }
       ]
     });
   };
@@ -1908,10 +1910,31 @@
   var cgTimer = null, cgSinkTimer = null, cgEntered = false;
 
   function startLabel() {
-    if (S.day > 1 || S.stages.length > 0 || S.entered) return '\u7EE7\u7EED\u5192\u9669'; // 继续冒险
-    return '\u5F00\u59CB\u6F02\u6D41'; // 开始漂流
+    if (Game.SideScroll && Game.SideScroll.shouldUseSideScroll()) {
+      try {
+        var raw = wx.getStorageSync(Game.SideScroll.SAVE_KEY);
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && (p.shelterBuilt || p.day > 1 || (p.inv && Object.keys(p.inv).length) || p.introSeen))
+            return '继续冒险'; // 继续冒险
+        }
+      } catch (e) {}
+      return '开始求生'; // 开始求生
+    }
+    if (S.day > 1 || S.stages.length > 0 || S.entered) return '继续冒险'; // 继续冒险
+    return '开始漂流'; // 开始漂流
   }
   function onStart() {
+    // V2 P0：默认横版荒岛；Game.PLAY_MODE==='board' 走旧棋盘三合
+    if (Game.SideScroll && Game.SideScroll.shouldUseSideScroll()) {
+      var forceNew = false;
+      try {
+        var rawSs = wx.getStorageSync(Game.SideScroll.SAVE_KEY);
+        if (!rawSs) forceNew = true;
+      } catch (e) { forceNew = true; }
+      Game.SideScroll.beginRun(forceNew);
+      return;
+    }
     var isNew = S.day === 1 && S.stages.length === 0 && !S.board.some(function (x) { return x; }) && !S.entered;
     if (isNew) playCG();
     else enterGame();
@@ -2028,6 +2051,14 @@
   function onTouchStart(e) {
     var p = touchPos(e);
     if (!p) return;
+    // V2 横版摇杆（优先于普通 hits，弹窗除外）
+    if (!modal && Game.SideScroll && Game.SideScroll.isActive()) {
+      if (Game.SideScroll.onTouchStart(p, W, H)) {
+        pendingHit = null;
+        pressedRect = null;
+        return;
+      }
+    }
     // 弹窗优先
     if (modal) {
       for (var i = Game.hits.length - 1; i >= 0; i--) {
@@ -2094,6 +2125,9 @@
     pressedRect = null;
   }
   function onTouchEnd(e) {
+    if (Game.SideScroll && Game.SideScroll.isActive()) {
+      Game.SideScroll.onTouchEnd();
+    }
     if (dragState) {
       var pEnd = touchPos(e);
       if (pEnd) updateDragAt(pEnd.x, pEnd.y);
@@ -2130,6 +2164,9 @@
   function onTouchMove(e) {
     var p = touchPos(e);
     if (!p) return;
+    if (Game.SideScroll && Game.SideScroll.isActive() && Game.SideScroll.onTouchMove(p, W, H)) {
+      return;
+    }
     if (dragState) {
       updateDragAt(p.x, p.y);
       return;
@@ -2156,6 +2193,7 @@
     }
   }
   function onTouchCancel() {
+    if (Game.SideScroll && Game.SideScroll.isActive()) Game.SideScroll.onTouchEnd();
     if (dragState) clearDrag();
     pendingHit = null;
     pressedRect = null;
@@ -2206,17 +2244,22 @@
       mergeAnim[k] -= dt;
       if (mergeAnim[k] <= 0) delete mergeAnim[k];
     }
-    tryTickEnergy();
 
-    // V2.0：按本地时刷新主题色；开场期间强制叙事罩（C），暂停设备 A/B/C
-    ensureIntroTheme();
-    if (D.applyTheme) D.applyTheme(new Date(now));
-    // V2.0：日夜意外低频 tick（开场脚本期间暂停）
-    if (!introActive()) {
-      if (!App._dnTickAt) App._dnTickAt = now;
-      if (now - App._dnTickAt > 45000) {
-        App._dnTickAt = now;
-        maybeDayNightIncident('tick');
+    var ssOn = Game.SideScroll && Game.SideScroll.isActive();
+    if (ssOn) {
+      Game.SideScroll.update(dt, W, H);
+    } else {
+      tryTickEnergy();
+      // V2.0：按本地时刷新主题色；开场期间强制叙事罩（C），暂停设备 A/B/C
+      ensureIntroTheme();
+      if (D.applyTheme) D.applyTheme(new Date(now));
+      // V2.0：日夜意外低频 tick（开场脚本期间暂停）
+      if (!introActive()) {
+        if (!App._dnTickAt) App._dnTickAt = now;
+        if (now - App._dnTickAt > 45000) {
+          App._dnTickAt = now;
+          maybeDayNightIncident('tick');
+        }
       }
     }
 
@@ -2225,7 +2268,11 @@
     Game.Render.render(ctx, W, H, now / 1000);
 
     // 定时存档（每 5s）
-    if (now - lastSave > 5000) { lastSave = now; save(); }
+    if (now - lastSave > 5000) {
+      lastSave = now;
+      if (ssOn && Game.SideScroll.save) Game.SideScroll.save();
+      else save();
+    }
 
     requestAnimationFrame(loop);
   }

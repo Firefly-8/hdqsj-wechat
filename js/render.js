@@ -1873,6 +1873,15 @@
   function render(ctx, W, H, t) {
     Game.hits = [];
     var sc = Game.scene;
+    if (sc === 'sidescroll') {
+      // V2 P0 横版荒岛：自管绘制与 hits
+      if (Game.SideScroll && Game.SideScroll.render) Game.SideScroll.render(ctx, W, H);
+      Game.FX.draw(ctx, W, H);
+      var hitsBeforeModalSs = Game.hits.length;
+      drawModal(ctx, W, H);
+      if (Game.modal) Game.hits = Game.hits.slice(hitsBeforeModalSs);
+      return;
+    }
     if (sc === 'home') {
       drawHome(ctx, W, H, t);
     } else if (sc === 'cg') {
@@ -1882,7 +1891,7 @@
     } else if (sc === 'victory') {
       drawVictory(ctx, W, H, t);
     } else {
-      // game
+      // game（旧棋盘三合）
       if (Game.tab === 'camp') drawCamp(ctx, W, H);
       else if (Game.tab === 'log') drawLog(ctx, W, H);
       else drawGame(ctx, W, H);
