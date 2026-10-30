@@ -55,7 +55,12 @@
       // V1.18: 采集地点常驻（默认岸边）
       gatherZone: 'shore',
       // V1.19 脚印/星期五弧
-      footprintSeen: false, friday: false, fridayBond: false
+      footprintSeen: false, friday: false, fridayBond: false,
+      // V2.0a+ 开场 0–3 分钟脚本
+      saveVer: 2,
+      introStep: 0, introDone: false, introBias: null, introWreck: 0,
+      _introBegun: false,
+      _introMigrated: true
     };
   }
   // 旧存档兼容：补齐缺失字段，防止读取崩溃
@@ -74,6 +79,28 @@
     }
     s.stages = _st;
     if (typeof s.bottleDate !== 'string') s.bottleDate = new Date().toDateString();
+    // V2.0a+：老档跳过开场；新档跑 intro
+    if (!s._introMigrated || (s.saveVer == null) || s.saveVer < 2) {
+      var progressed = (s.stages && s.stages.length > 0) || s.day > 1 || s.guideDone ||
+        (s.totalBuilds > 0) || !!s.introDone;
+      // 已进过主界面的旧档（无 intro 字段）直接标记 done，避免二次开场
+      if (s.introDone == null) {
+        if (progressed || s.welcomed || s.entered) {
+          s.introDone = true;
+          s.introStep = 5;
+        } else {
+          s.introDone = false;
+          s.introStep = 0;
+        }
+      }
+      if (s.introBias === undefined) s.introBias = null;
+      if (s.introWreck == null) s.introWreck = 0;
+      if (s.introStep == null) s.introStep = s.introDone ? 5 : 0;
+      s.saveVer = 2;
+      s._introMigrated = true;
+    }
+    if (s.introWreck == null) s.introWreck = 0;
+    if (s.introBias === undefined) s.introBias = null;
     return s;
   }
   // V1.8: 小说日记解锁（进度分驱动 + 结局显式解锁）
@@ -868,7 +895,169 @@
       Game.FX.toast('\uD83D\uDD14 可以建造：' + names.slice(0, 2).join('\u3001') + (names.length > 2 ? '\u2026' : ''));
     }
   }
+  // ============ V2.0a+ 开场 0–3 分钟脚本（b0–b5） ============
+  // 卖困岛首栋，不卖三消；约 90s 内 home 槽出现 121
+  function introActive() {
+    return !!(S && !S.introDone && (S.introStep == null || S.introStep < 5));
+  }
+  function introBoardHidden() {
+    // b0–b4 整页藏棋盘；b5 起展开
+    return introActive() && (S.introStep == null || S.introStep <= 4);
+  }
+  function introGoalText() {
+    var I = D.INTRO || {};
+    var step = S.introStep || 0;
+    var w = S.introWreck || 0;
+    if (step <= 2) {
+      return (I.GOAL_SHELTER || '日落前搭起庇护所') + ' · 材料 ' + w + '/3';
+    }
+    if (step === 3) return I.LINE_B3 || '岛上多了座棚';
+    if (step === 4) return '雨要来了——加固屋顶，还是先囤粮？';
+    return I.GOAL_HUT || '扩建茅屋：把棚盖成茅屋';
+  }
+  function beginIntro() {
+    S.guideStep = 0;
+    S.guideDone = true; // 旧采集引导让位给开场脚本
+    if (D.setThemeForce) D.setThemeForce('C');
+    if (D.applyTheme) D.applyTheme();
+    // 已进行中的开场：只恢复叙事罩，不重置进度
+    if (S._introBegun && !S.introDone && ((S.introWreck || 0) > 0 || (S.introStep || 0) > 0 || S.stages.indexOf(121) >= 0)) {
+      if ((S.introStep || 0) === 3) {
+        setTimeout(function () {
+          if (!S || S.introDone || S.introStep !== 3) return;
+          S.introStep = 4;
+          var I2 = D.INTRO || {};
+          Game.FX.toast(I2.LINE_B4 || '云压下来。要先加固屋顶，还是先囤点椰肉？', 2600);
+          save();
+        }, 800);
+      }
+      save();
+      return;
+    }
+    S.introDone = false;
+    S.introStep = 0;
+    S.introWreck = 0;
+    S.introBias = null;
+    S._introBegun = true;
+    var I = D.INTRO || {};
+    Game.FX.toast(I.LINE_B0 || '风暴过去。你趴在沙滩上。船骸歪在潮线。', 2800);
+    save();
+  }
+  function onIntroWreckTap() {
+    if (!introActive()) return;
+    if ((S.introStep || 0) > 2) return;
+    if ((S.introWreck || 0) >= 3) return;
+    S.introWreck = (S.introWreck || 0) + 1;
+    var w = S.introWreck;
+    var I = D.INTRO || {};
+    if (w === 1) {
+      S.introStep = 1;
+      Game.FX.toast(I.LINE_B1 || '烂船板还能用。再捡两根，就能支起棚。', 2200);
+    } else if (w === 2) {
+      S.introStep = 2;
+      Game.FX.toast('又捡到一截龙骨。材料 ' + w + '/3', 1800);
+    } else {
+      S.introStep = 2;
+      Game.FX.toast(I.LINE_B2 || '潮水在涨。材料齐了。', 2000);
+    }
+    // 飞屑反馈（中屏残骸附近）
+    if (Game.FX.sparkle) Game.FX.sparkle(187.5, Math.round(H * 0.42), '#C4A574', 8);
+    save();
+  }
+  function onIntroBuildShelter() {
+    if (!introActive()) return;
+    if ((S.introWreck || 0) < 3) {
+      Game.FX.toast('再从船骸捡点材料（' + (S.introWreck || 0) + '/3）');
+      return;
+    }
+    if (S.stages.indexOf(121) < 0) {
+      S.stages.push(121);
+      S.offlineUnlocked = true;
+    }
+    S.introStep = 3;
+    S.totalBuilds = (S.totalBuilds || 0) + 1;
+    // 不走天数过渡，保证 ~90s 硬门槛；复用光晕
+    if (Game.FX.campUp) Game.FX.campUp(121);
+    var I = D.INTRO || {};
+    Game.FX.toast(I.LINE_B3 || '岛上多了座棚', 2400);
+    var slot = D.islandSlotForStage && D.islandSlotForStage(121);
+    var sx = slot && slot.nx != null ? slot.nx * 375 : 187.5;
+    if (Game.FX.sparkle) Game.FX.sparkle(sx, 84, '#E8763A', 14);
+    save();
+    // 短停后进入 b4 二选一
+    setTimeout(function () {
+      if (!S || S.introDone || S.introStep !== 3) return;
+      S.introStep = 4;
+      var I2 = D.INTRO || {};
+      Game.FX.toast(I2.LINE_B4 || '云压下来。要先加固屋顶，还是先囤点椰肉？', 2600);
+      save();
+    }, 1600);
+  }
+  function onIntroBias(choice) {
+    if (!introActive() || (S.introStep || 0) !== 4) return;
+    if (choice !== 'reinforce' && choice !== 'food') return;
+    S.introBias = choice;
+    var I = D.INTRO || {};
+    if (choice === 'reinforce') {
+      Game.FX.toast(I.TOAST_REINFORCE || '屋顶先扛住。雨夜更好熬。', 2200);
+    } else {
+      Game.FX.toast(I.TOAST_FOOD || '椰肉入囤。雨夜棚可能破角。', 2200);
+    }
+    // 进入 b5：展开棋盘、交还主题
+    S.introStep = 5;
+    S.introDone = true;
+    if (D.clearThemeForce) D.clearThemeForce();
+    if (D.applyTheme) D.applyTheme();
+    setTimeout(function () {
+      var I3 = D.INTRO || {};
+      Game.FX.toast(I3.LINE_B5 || '天亮了。目标：把棚盖成茅屋。棋盘解开。', 2800);
+    }, 500);
+    save();
+  }
+  function ensureIntroTheme() {
+    if (introActive() && (S.introStep == null || S.introStep <= 4)) {
+      if (D.setThemeForce && D.getThemeForce && D.getThemeForce() !== 'C') {
+        D.setThemeForce('C');
+      } else if (D.setThemeForce && !D.getThemeForce()) {
+        D.setThemeForce('C');
+      }
+    }
+  }
+
   function getGoalHint() {
+    if (introActive()) return introGoalText();
+    if (S.introDone && S.stages.indexOf(121) >= 0 && S.stages.indexOf(123) < 0) {
+      // 庇护所已立、茅屋未建：目标条换扩建茅屋
+      var hutShort = [];
+      var hutNeed = null;
+      for (var ht = 0; ht < D.TECH_TREES.length; ht++) {
+        if (D.TECH_TREES[ht].id !== 'build') continue;
+        for (var hn = 0; hn < D.TECH_TREES[ht].nodes.length; hn++) {
+          var hnode = D.TECH_TREES[ht].nodes[hn];
+          if (hnode.id === 123 || (hnode.id === 122 && S.stages.indexOf(122) < 0)) {
+            if (S.stages.indexOf(hnode.id) >= 0) continue;
+            if (hnode.prev && S.stages.indexOf(hnode.prev) < 0) continue;
+            hutNeed = hnode;
+            break;
+          }
+        }
+      }
+      if (hutNeed) {
+        var hNeedMap = getEffectiveNeed(hutNeed.need);
+        var hCan = true;
+        for (var hid in hNeedMap) {
+          if (countItem(+hid) < hNeedMap[hid]) {
+            hCan = false;
+            hutShort.push((D.ITEMS[+hid] ? D.ITEMS[+hid].name : hid) + '\u00D7' + (hNeedMap[hid] - countItem(+hid)));
+          }
+        }
+        if (hutNeed.id === 122) {
+          return hCan ? ('可建造：仓储（迈向茅屋）') : ('扩建茅屋：先建仓储，还差 ' + hutShort.slice(0, 3).join('\u3001'));
+        }
+        return hCan ? ('可建造：茅屋（打开「建造」）') : ('扩建茅屋：还差 ' + hutShort.slice(0, 3).join('\u3001'));
+      }
+      return (D.INTRO && D.INTRO.GOAL_HUT) || '扩建茅屋：把棚盖成茅屋';
+    }
     var best = null;
     for (var t = 0; t < D.TECH_TREES.length; t++) {
       var tree = D.TECH_TREES[t];
@@ -1100,6 +1289,10 @@
   function digGather(zoneId) {
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) return;
     if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) return;
+    if (introBoardHidden()) {
+      Game.FX.toast('先从船骸凑齐材料，搭起庇护所');
+      return;
+    }
     var wInfo = getWeatherInfo();
     if (!wInfo.canGather) { Game.FX.toast('\u26C8\uFE0F 风暴天无法外出采集！'); return; }
     if (S.energy <= 0) { Game.FX.toast('体力不足，先休息或等自然恢复'); return; }
@@ -1538,6 +1731,7 @@
 
   // ============ 漂流瓶 ============
   function bottle() {
+    if (introBoardHidden()) { Game.FX.toast('先搭起庇护所，再去捞瓶'); return; }
     // V1.8审查修复: 采集动画进行中禁止漂流瓶，避免 2.4s 后落子时覆盖刚开出的格子
     if (Game.FX.gatherAnimActive && Game.FX.gatherAnimActive()) { Game.FX.toast('采集中，请稍候'); return; }
     if (Game.FX.buildAnimActive && Game.FX.buildAnimActive()) { Game.FX.toast('建造中，请稍候'); return; }
@@ -1644,7 +1838,13 @@
   }
 
   // ============ Tab / 标签 ============
-  function switchTab(t) { Game.tab = t; }
+  function switchTab(t) {
+    if (introBoardHidden() && t !== 'board') {
+      Game.FX.toast('先在岛上搭起庇护所');
+      return;
+    }
+    Game.tab = t;
+  }
 
   // 体力倒计时文案（对应 #energyTimer）
   // V1.11机制修复: 倒计时改用与 tryTickEnergy 一致的「实际恢复间隔」
@@ -1783,10 +1983,13 @@
           body: '你离开了 ' + Math.floor(S._offlineSec / 60) + ' 分钟\n营地为你攒下了 ' + S._offlineReward + ' 个资源',
           buttons: offlineBtns
         });
-      } else if (S.stages.length === 0 && S.day === 1) {
-        // V1.15: 修复 stages.indexOf(1) 废条件；首局弱引导
+      } else if (!S.introDone) {
+        // V2.0a+：开场脚本（藏棋盘、残骸拾取 → 首栋庇护所）；可中途恢复
+        beginIntro();
+      } else if (S.stages.length === 0 && S.day === 1 && S.introDone) {
+        // 旧引导兜底（已跳过开场的空档）
         S.guideStep = 1;
-        Game.FX.toast('\u2460 \u70B9\u300C\u91C7\u96C6\u300D\u6536\u8D44\u6E90\n\u4E09\u4E2A\u540C\u7C7B\u4F1A\u81EA\u52A8\u5408\u6210\u5347\u7EA7');
+        Game.FX.toast('\u2460 \u70B9\u300C\u91C7\u96C6\u300D\u6536\u8D44\u6E90\n\u62D6\u8FD1\u540C\u7269\u4E09\u5408\u4E00');
         triggerDailyEvent();
       } else {
         // V1.1: 触发每日随机事件
@@ -1844,8 +2047,8 @@
       pressedRect = null;
       return;
     }
-    // V2.0：棋盘上拖有物格 = 手拖三合；点空白才滚动
-    if (Game.scene === 'game' && Game.tab === 'board') {
+    // V2.0：棋盘上拖有物格 = 手拖三合；点空白才滚动（开场藏盘期间禁用）
+    if (Game.scene === 'game' && Game.tab === 'board' && !introBoardHidden()) {
       var cellIdx = hitTestBoardCell(p.x, p.y);
       if (cellIdx >= 0 && S.board[cellIdx]) {
         var itemId = S.board[cellIdx];
@@ -2004,13 +2207,16 @@
     }
     tryTickEnergy();
 
-    // V2.0：按本地时刷新主题色（国内即北京时间）
+    // V2.0：按本地时刷新主题色；开场期间强制叙事罩（C），暂停设备 A/B/C
+    ensureIntroTheme();
     if (D.applyTheme) D.applyTheme(new Date(now));
-    // V2.0：日夜意外低频 tick（约每 45s 掷一次，内部仍有冷却/日上限）
-    if (!App._dnTickAt) App._dnTickAt = now;
-    if (now - App._dnTickAt > 45000) {
-      App._dnTickAt = now;
-      maybeDayNightIncident('tick');
+    // V2.0：日夜意外低频 tick（开场脚本期间暂停）
+    if (!introActive()) {
+      if (!App._dnTickAt) App._dnTickAt = now;
+      if (now - App._dnTickAt > 45000) {
+        App._dnTickAt = now;
+        maybeDayNightIncident('tick');
+      }
     }
 
     // 绘制
@@ -2055,6 +2261,11 @@
     Game.cg = null;
     Game.mergeAnim = mergeAnim;
     Game.drag = null;
+    if (introActive()) {
+      if (D.setThemeForce) D.setThemeForce('C');
+    } else if (D.clearThemeForce) {
+      D.clearThemeForce();
+    }
     if (D.applyTheme) D.applyTheme();
     Game.AD.init();
 
@@ -2116,6 +2327,12 @@
   App.energyTimerText = energyTimerText;
   App.campTagText = campTagText;
   App.getGoalHint = getGoalHint;
+  App.introActive = introActive;
+  App.introBoardHidden = introBoardHidden;
+  App.introGoalText = introGoalText;
+  App.onIntroWreckTap = onIntroWreckTap;
+  App.onIntroBuildShelter = onIntroBuildShelter;
+  App.onIntroBias = onIntroBias;
   App.hasReadyBuild = hasReadyBuild;
   App.getReadyBuildIds = getReadyBuildIds;
   App.getDefenseLevel = getDefenseLevel;

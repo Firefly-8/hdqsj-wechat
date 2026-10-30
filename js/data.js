@@ -531,9 +531,16 @@
     if (h >= 17 && h < 20) return 'A';
     return 'C';
   }
+  // V2.0a+ 开场：强制叙事主题（旁晚/雨意），暂停设备本地时 A/B/C
+  var _themeForceId = null;
+  function setThemeForce(id) {
+    _themeForceId = (id && THEMES[id]) ? id : null;
+  }
+  function clearThemeForce() { _themeForceId = null; }
+  function getThemeForce() { return _themeForceId; }
   function getThemeInfo(now) {
     var d = now || new Date();
-    var id = themeIdByHour(d.getHours());
+    var id = _themeForceId || themeIdByHour(d.getHours());
     return THEMES[id];
   }
   // 主题色短过渡（切换时段时 lerp，避免整屏硬切）
@@ -722,6 +729,25 @@
       effect: { type: 'none' } }
   ];
 
+
+  // V2.0a+ 开场 0–3 分钟文案（b0–b5）
+  var INTRO = {
+    GOAL_SHELTER: '日落前搭起庇护所',
+    GOAL_HUT: '扩建茅屋：把棚盖成茅屋',
+    LINE_B0: '风暴过去。你趴在沙滩上。船骸歪在潮线。',
+    LINE_B1: '烂船板还能用。再捡两根，就能支起棚。',
+    LINE_B2: '潮水在涨。材料齐了。',
+    LINE_B3: '岛上多了座棚',
+    LINE_B4: '云压下来。要先加固屋顶，还是先囤点椰肉？',
+    TOAST_REINFORCE: '屋顶先扛住。雨夜更好熬。',
+    TOAST_FOOD: '椰肉入囤。雨夜棚可能破角。',
+    LINE_B5: '天亮了。目标：把棚盖成茅屋。棋盘解开。',
+    BUILD_BTN: '搭起来',
+    BTN_REINFORCE: '加固屋顶',
+    BTN_FOOD: '先囤椰肉'
+  };
+
+
   // 启动时先套一次默认主题（按当前本地时）
   applyTheme();
 
@@ -730,6 +756,7 @@
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
     TECH_TREES: TECH_TREES,
     ISLAND_SLOTS: ISLAND_SLOTS, resolveIslandSlot: resolveIslandSlot, islandSlotForStage: islandSlotForStage,
+    INTRO: INTRO,
     E_INTERVAL: E_INTERVAL, MISS_LINES: MISS_LINES, FULL_LINES: FULL_LINES,
     LOGS: LOGS, DIARY_CHAPTERS: DIARY_CHAPTERS, VICTORY_TEXT: VICTORY_TEXT,
     DT_ICONS: DT_ICONS, DT_SUBS: DT_SUBS, CG_TEXT: CG_TEXT,
@@ -744,6 +771,7 @@
     FLOTSAM: FLOTSAM,
     // V2.0 PR1 主题
     THEMES: THEMES, themeIdByHour: themeIdByHour, getThemeInfo: getThemeInfo, applyTheme: applyTheme,
+    setThemeForce: setThemeForce, clearThemeForce: clearThemeForce, getThemeForce: getThemeForce,
     // V2.0 日夜
     dayPeriodByHour: dayPeriodByHour, getDayPeriod: getDayPeriod,
     BUILD_COST_MUL: BUILD_COST_MUL, scaleBuildNeed: scaleBuildNeed, getBuildCostMul: getBuildCostMul,

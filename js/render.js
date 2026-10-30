@@ -502,11 +502,22 @@
   // ============ V2.0a 岛面可见建筑 ============
   // 岛面带：顶栏下沿芯片之下、资源条之上；未建不画；胶囊+emoji 占位
   function islandBandLayout(W, H) {
+    var hideBoard = Game.App && Game.App.introBoardHidden && Game.App.introBoardHidden();
+    if (hideBoard) {
+      // 开场：整页给岛面+船骸，棋盘不占位
+      return {
+        chipY: 45, chipH: 22,
+        bandY: 72, bandH: Math.max(70, Math.floor(H * 0.16)),
+        resY: -1, // 不画资源条
+        intro: true
+      };
+    }
     // 压缩营地标签为顶栏下沿芯片，给岛面腾垂直空间
     return {
       chipY: 45, chipH: 16,
       bandY: 63, bandH: 44,
-      resY: 110
+      resY: 110,
+      intro: false
     };
   }
 
@@ -584,6 +595,141 @@
     }
   }
 
+
+  function drawIntroNarrativeVeil(ctx, W, H) {
+    // 傍晚/雨意叙事罩（开场强制，与设备本地时无关）
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'rgba(20, 35, 55, 0.28)');
+    g.addColorStop(0.45, 'rgba(30, 45, 55, 0.12)');
+    g.addColorStop(1, 'rgba(15, 28, 40, 0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 44, W, H - 44);
+    // 细雨丝
+    var t = (Date.now() / 1000);
+    ctx.strokeStyle = 'rgba(180, 200, 220, 0.18)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < 18; i++) {
+      var x = ((i * 47 + t * 40) % (W + 20)) - 10;
+      var y0 = 50 + ((i * 73 + t * 90) % (H - 80));
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x - 3, y0 + 14);
+      ctx.stroke();
+    }
+  }
+
+  function drawEmptyHomeGuide(ctx, W, bandY, bandH, t) {
+    var slots = Game.DATA.ISLAND_SLOTS || [];
+    var home = null;
+    for (var i = 0; i < slots.length; i++) if (slots[i].id === 'home') home = slots[i];
+    if (!home) return;
+    var stages = (Game.S && Game.S.stages) || [];
+    if (Game.DATA.resolveIslandSlot && Game.DATA.resolveIslandSlot(home, stages)) return; // 已有建筑
+    var rect = islandSlotRect(home, W, bandY, bandH);
+    var breath = 0.45 + 0.35 * Math.sin((t || 0) * 2.6);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232,118,58,' + (0.35 + breath * 0.5).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    roundRect(ctx, rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4, Math.min(rect.h / 2, 14) + 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,248,230,' + (0.12 + breath * 0.18).toFixed(3) + ')';
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, Math.min(rect.h / 2, 14));
+    ctx.fill();
+    ctx.fillStyle = 'rgba(232,118,58,' + (0.55 + breath * 0.35).toFixed(3) + ')';
+    ctx.font = Math.floor(rect.h * 0.42) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u26FA', rect.cx, rect.cy - 2);
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = 'rgba(74,52,40,0.75)';
+    ctx.fillText('待搭', rect.cx, rect.y + rect.h - 7);
+    ctx.restore();
+  }
+
+  function drawIntroWreck(ctx, W, H, t) {
+    var S = Game.S;
+    var w = (S && S.introWreck) || 0;
+    var step = (S && S.introStep) || 0;
+    if (step > 2 && w >= 3 && step >= 3) {
+      // b3+ 残骸仍可画淡影，但不可点
+    }
+    var cx = W / 2, cy = H * 0.42;
+    var bw = 110, bh = 56;
+    var pulse = 0.5 + 0.5 * Math.sin((t || 0) * 2.2);
+    ctx.save();
+    // 船骸剪影
+    ctx.fillStyle = 'rgba(40, 32, 28, 0.55)';
+    ctx.beginPath();
+    ctx.moveTo(cx - bw / 2, cy + 8);
+    ctx.quadraticCurveTo(cx - 20, cy - bh / 2, cx + 10, cy - 6);
+    ctx.quadraticCurveTo(cx + bw / 2 - 10, cy + 4, cx + bw / 2, cy + 14);
+    ctx.lineTo(cx - bw / 2 + 8, cy + 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(196,165,116,' + (0.35 + pulse * 0.35).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 桅杆残段
+    ctx.strokeStyle = 'rgba(90,70,50,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy - 4);
+    ctx.lineTo(cx + 18, cy - bh / 2 - 6);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(250,241,221,0.9)';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚢 船骸', cx, cy + bh / 2 + 14);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(250,241,221,0.75)';
+    ctx.fillText('材料 ' + w + '/3', cx, cy + bh / 2 + 30);
+    ctx.restore();
+    if (step <= 2 && w < 3) {
+      hit(cx - bw / 2 - 8, cy - bh / 2 - 12, bw + 16, bh + 50, function () {
+        if (Game.App && Game.App.onIntroWreckTap) Game.App.onIntroWreckTap();
+      });
+    }
+  }
+
+  function drawIntroActions(ctx, W, H, pressed) {
+    var S = Game.S;
+    var C = Game.DATA.C;
+    var I = Game.DATA.INTRO || {};
+    var step = (S && S.introStep) || 0;
+    var wreck = (S && S.introWreck) || 0;
+    if (step <= 2 && wreck >= 3) {
+      var bw = W - 48, bh = 48;
+      var bx = 24, by = H * 0.62;
+      btn(ctx, bx, by, bw, bh, I.BUILD_BTN || '搭起来', C.fire, '#FFFFFF', true, pressed === 'introBuild', 12, 16);
+      hit(bx, by, bw, bh, function () {
+        if (Game.App && Game.App.onIntroBuildShelter) Game.App.onIntroBuildShelter();
+      });
+    }
+    if (step === 4) {
+      var gap = 10;
+      var btnW = (W - 40 - gap) / 2;
+      var by2 = H * 0.58;
+      var bh2 = 52;
+      // 视觉对等：同色同尺寸，勿一主一次
+      var bgEq = C.wood;
+      var fgEq = '#FFFFFF';
+      btn(ctx, 20, by2, btnW, bh2, I.BTN_REINFORCE || '加固屋顶', bgEq, fgEq, true, pressed === 'introRe', 12, 13);
+      hit(20, by2, btnW, bh2, function () {
+        if (Game.App && Game.App.onIntroBias) Game.App.onIntroBias('reinforce');
+      });
+      btn(ctx, 20 + btnW + gap, by2, btnW, bh2, I.BTN_FOOD || '先囤椰肉', bgEq, fgEq, true, pressed === 'introFood', 12, 13);
+      hit(20 + btnW + gap, by2, btnW, bh2, function () {
+        if (Game.App && Game.App.onIntroBias) Game.App.onIntroBias('food');
+      });
+      ctx.fillStyle = 'rgba(250,241,221,0.7)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('无对错，只记倾斜', W / 2, by2 + bh2 + 18);
+    }
+  }
+
   function drawGame(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
@@ -632,9 +778,12 @@
       ctx.fill();
     }
 
-    // V2.0a: 营地标签缩短为顶栏下沿芯片，给岛面腾垂直空间
-    var tagText = Game.App.campTagText();
-    ctx.font = '9px sans-serif';
+    // V2.0a / 开场：目标条顶替营地 chip
+    var hideBoard = !!_isl.intro;
+    var tagText = hideBoard && Game.App.introGoalText
+      ? Game.App.introGoalText()
+      : Game.App.campTagText();
+    ctx.font = hideBoard ? '10px sans-serif' : '9px sans-serif';
     var tw = Math.min(W - 24, ctx.measureText(tagText).width + 16);
     var tx = (W - tw) / 2, ty = _isl.chipY;
     var scale = 1, glow = 0;
@@ -667,8 +816,17 @@
     ctx.fillText(tagText, W / 2, ty + _isl.chipH / 2);
     ctx.restore();
 
+    // 开场叙事罩先压海滩底，再画岛面建筑（建筑不被罩没）
+    if (hideBoard) drawIntroNarrativeVeil(ctx, W, H);
     // V2.0a: 岛面已建槽位（胶囊占位）；未建不画；不挡棋盘
     drawIslandBuildings(ctx, W, H, _isl.bandY, _isl.bandH);
+    if (hideBoard) {
+      drawEmptyHomeGuide(ctx, W, _isl.bandY, _isl.bandH, Date.now() / 1000);
+      drawIntroWreck(ctx, W, H, Date.now() / 1000);
+      drawIntroActions(ctx, W, H, pressed);
+      // 开场整页藏棋盘与常规资源条/采集条；不画半高迷你盘
+      return;
+    }
 
     // 资源条（对应 .resbar：木材/食物/石料 棋盘内计数）
     // V1.9: 统计逻辑本身正确（countChain 每帧实时统计棋盘内该链物品总数）
