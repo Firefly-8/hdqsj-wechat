@@ -49,9 +49,40 @@
   }
   // 场景背景：已加载则铺图，否则返回 false（调用方降级为程序渐变）
   function drawSceneBg(ctx, key, W, H) {
+    if (Game.bgFailed && Game.bgFailed[key]) return false;
     var img = Game.bgAssets && Game.bgAssets[key];
     if (img && img.complete && img.width) { drawCover(ctx, img, W, H); return true; }
     return false;
+  }
+
+  /** 绘制物品图标：手绘 WebP 优先，失败/未就绪 → emoji；可选小字名称 */
+  function drawItemVisual(ctx, id, cx, cy, bw, bh, opt) {
+    opt = opt || {};
+    var it = Game.DATA.ITEMS[id];
+    if (!it) return;
+    var ok = Game.App && Game.App.isAssetOk ? Game.App.isAssetOk(id) : false;
+    if (!ok) {
+      var a = Game.assets && Game.assets[id];
+      ok = !!(a && a.complete && a.width && !(Game.assetFailed && Game.assetFailed[id]));
+    }
+    if (ok) {
+      var img = Game.assets[id];
+      var pad = bw * 0.12;
+      ctx.drawImage(img, cx + pad, cy + pad, bw - pad * 2, bh - pad * 2);
+    } else {
+      // 精致兜底：居中 emoji + 底部短名
+      ctx.font = (bh * (opt.showName ? 0.48 : 0.6)) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = Game.DATA.C.ink;
+      ctx.fillText(it.em, cx + bw / 2, cy + bh / 2 - (opt.showName ? 4 : 2));
+      if (opt.showName) {
+        ctx.font = '8px sans-serif';
+        ctx.fillStyle = Game.DATA.C.wood;
+        var nm = it.name.length > 4 ? it.name.slice(0, 4) : it.name;
+        ctx.fillText(nm, cx + bw / 2, cy + bh - 7);
+      }
+    }
   }
 
   // 简单按钮绘制（支持按压下沉效果：按中时 y+2）
@@ -467,6 +498,239 @@
   }
 
   // ============ 游戏主界面 ============
+
+  // ============ V2.0a 岛面可见建筑 ============
+  // 岛面带：顶栏下沿芯片之下、资源条之上；未建不画；胶囊+emoji 占位
+  function islandBandLayout(W, H) {
+    var hideBoard = Game.App && Game.App.introBoardHidden && Game.App.introBoardHidden();
+    if (hideBoard) {
+      // 开场：整页给岛面+船骸，棋盘不占位
+      return {
+        chipY: 45, chipH: 22,
+        bandY: 72, bandH: Math.max(70, Math.floor(H * 0.16)),
+        resY: -1, // 不画资源条
+        intro: true
+      };
+    }
+    // 压缩营地标签为顶栏下沿芯片，给岛面腾垂直空间
+    return {
+      chipY: 45, chipH: 16,
+      bandY: 63, bandH: 44,
+      resY: 110,
+      intro: false
+    };
+  }
+
+  function drawIslandNightVeil(ctx, W, bandY, bandH) {
+    var a = (Game.DATA.C && Game.DATA.C._islandNightAlpha) || 0;
+    if (a <= 0.001) return;
+    ctx.fillStyle = 'rgba(20,40,60,' + a + ')';
+    ctx.fillRect(0, bandY, W, bandH);
+  }
+
+  function islandSlotRect(slot, W, bandY, bandH) {
+    var cx = slot.nx * W;
+    var cy = bandY + slot.ny * bandH;
+    var bw = Math.max(28, W * slot.rw * slot.scale);
+    var bh = Math.max(22, bandH * slot.rh * Math.min(1, slot.scale + 0.05));
+    // 底部贴岛带，略上浮避免裁切
+    var bx = cx - bw / 2;
+    var by = Math.min(bandY + bandH - bh - 1, Math.max(bandY + 1, cy - bh * 0.55));
+    return { x: bx, y: by, w: bw, h: bh, cx: cx, cy: by + bh * 0.45 };
+  }
+
+  function drawIslandSlotVisual(ctx, resolved, rect, glow) {
+    var x = rect.x, y = rect.y, w = rect.w, h = rect.h;
+    var rr = Math.min(h / 2, 14);
+    if (glow > 0) {
+      ctx.fillStyle = 'rgba(232,118,58,' + (0.35 * glow) + ')';
+      roundRect(ctx, x - 5, y - 5, w + 10, h + 10, rr + 4);
+      ctx.fill();
+    }
+    // 固定中性色：不吃主题 tint / 羊皮纸染色
+    ctx.fillStyle = 'rgba(255,248,230,0.82)';
+    roundRect(ctx, x, y, w, h, rr);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(74,52,40,0.42)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, w, h, rr);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#2C2416';
+    ctx.font = Math.floor(h * 0.48) + 'px sans-serif';
+    ctx.fillText(resolved.em, rect.cx, rect.cy - 3);
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = 'rgba(74,52,40,0.85)';
+    var nm = resolved.label.length > 4 ? resolved.label.slice(0, 4) : resolved.label;
+    ctx.fillText(nm, rect.cx, y + h - 7);
+  }
+
+  function drawIslandBuildings(ctx, W, H, bandY, bandH) {
+    var slots = Game.DATA.ISLAND_SLOTS || [];
+    var stages = (Game.S && Game.S.stages) || [];
+    var resolve = Game.DATA.resolveIslandSlot;
+    // 先夜罩（压海滩底），再画建筑（建筑不被罩）
+    drawIslandNightVeil(ctx, W, bandY, bandH);
+    var upId = (Game.FX.campUpActive && Game.FX.campUpActive() && Game.FX.campUpStageId)
+      ? Game.FX.campUpStageId() : 0;
+    var glowAmt = 0;
+    if (upId && Game.FX.campUpActive()) {
+      var cp = 1.1 - Game.FX.campUpTime();
+      glowAmt = Math.sin(Math.min(1, Math.max(0, cp)) * Math.PI);
+    }
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i];
+      var resolved = resolve ? resolve(slot, stages) : null;
+      if (!resolved) continue;
+      var rect = islandSlotRect(slot, W, bandY, bandH);
+      var g = (upId && resolved.stageId === upId) ? glowAmt : 0;
+      // 同槽升级：光晕也认 stageIds 内任一刚建 id
+      if (!g && upId && slot.stageIds.indexOf(upId) >= 0) g = glowAmt;
+      drawIslandSlotVisual(ctx, resolved, rect, g);
+      // 点击进建造页；岛面带在棋盘之上，不抢拖合
+      hit(rect.x, rect.y, rect.w, rect.h, function () {
+        if (Game.App && Game.App.switchTab) Game.App.switchTab('camp');
+      });
+    }
+  }
+
+
+  function drawIntroNarrativeVeil(ctx, W, H) {
+    // 傍晚/雨意叙事罩（开场强制，与设备本地时无关）
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'rgba(20, 35, 55, 0.28)');
+    g.addColorStop(0.45, 'rgba(30, 45, 55, 0.12)');
+    g.addColorStop(1, 'rgba(15, 28, 40, 0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 44, W, H - 44);
+    // 细雨丝
+    var t = (Date.now() / 1000);
+    ctx.strokeStyle = 'rgba(180, 200, 220, 0.18)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < 18; i++) {
+      var x = ((i * 47 + t * 40) % (W + 20)) - 10;
+      var y0 = 50 + ((i * 73 + t * 90) % (H - 80));
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x - 3, y0 + 14);
+      ctx.stroke();
+    }
+  }
+
+  function drawEmptyHomeGuide(ctx, W, bandY, bandH, t) {
+    var slots = Game.DATA.ISLAND_SLOTS || [];
+    var home = null;
+    for (var i = 0; i < slots.length; i++) if (slots[i].id === 'home') home = slots[i];
+    if (!home) return;
+    var stages = (Game.S && Game.S.stages) || [];
+    if (Game.DATA.resolveIslandSlot && Game.DATA.resolveIslandSlot(home, stages)) return; // 已有建筑
+    var rect = islandSlotRect(home, W, bandY, bandH);
+    var breath = 0.45 + 0.35 * Math.sin((t || 0) * 2.6);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232,118,58,' + (0.35 + breath * 0.5).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    roundRect(ctx, rect.x - 2, rect.y - 2, rect.w + 4, rect.h + 4, Math.min(rect.h / 2, 14) + 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,248,230,' + (0.12 + breath * 0.18).toFixed(3) + ')';
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, Math.min(rect.h / 2, 14));
+    ctx.fill();
+    ctx.fillStyle = 'rgba(232,118,58,' + (0.55 + breath * 0.35).toFixed(3) + ')';
+    ctx.font = Math.floor(rect.h * 0.42) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('\u26FA', rect.cx, rect.cy - 2);
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = 'rgba(74,52,40,0.75)';
+    ctx.fillText('待搭', rect.cx, rect.y + rect.h - 7);
+    ctx.restore();
+  }
+
+  function drawIntroWreck(ctx, W, H, t) {
+    var S = Game.S;
+    var w = (S && S.introWreck) || 0;
+    var step = (S && S.introStep) || 0;
+    if (step > 2 && w >= 3 && step >= 3) {
+      // b3+ 残骸仍可画淡影，但不可点
+    }
+    var cx = W / 2, cy = H * 0.42;
+    var bw = 110, bh = 56;
+    var pulse = 0.5 + 0.5 * Math.sin((t || 0) * 2.2);
+    ctx.save();
+    // 船骸剪影
+    ctx.fillStyle = 'rgba(40, 32, 28, 0.55)';
+    ctx.beginPath();
+    ctx.moveTo(cx - bw / 2, cy + 8);
+    ctx.quadraticCurveTo(cx - 20, cy - bh / 2, cx + 10, cy - 6);
+    ctx.quadraticCurveTo(cx + bw / 2 - 10, cy + 4, cx + bw / 2, cy + 14);
+    ctx.lineTo(cx - bw / 2 + 8, cy + 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(196,165,116,' + (0.35 + pulse * 0.35).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 桅杆残段
+    ctx.strokeStyle = 'rgba(90,70,50,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy - 4);
+    ctx.lineTo(cx + 18, cy - bh / 2 - 6);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(250,241,221,0.9)';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚢 船骸', cx, cy + bh / 2 + 14);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(250,241,221,0.75)';
+    ctx.fillText('材料 ' + w + '/3', cx, cy + bh / 2 + 30);
+    ctx.restore();
+    if (step <= 2 && w < 3) {
+      // 加大热区：含标签「船骸/材料」，避免点不准
+      hit(cx - bw / 2 - 24, cy - bh / 2 - 24, bw + 48, bh + 80, function () {
+        if (Game.App && Game.App.onIntroWreckTap) Game.App.onIntroWreckTap();
+      });
+    }
+  }
+
+  function drawIntroActions(ctx, W, H, pressed) {
+    var S = Game.S;
+    var C = Game.DATA.C;
+    var I = Game.DATA.INTRO || {};
+    var step = (S && S.introStep) || 0;
+    var wreck = (S && S.introWreck) || 0;
+    if (step <= 2 && wreck >= 3) {
+      var bw = W - 48, bh = 48;
+      var bx = 24, by = H * 0.62;
+      btn(ctx, bx, by, bw, bh, I.BUILD_BTN || '搭起来', C.fire, '#FFFFFF', true, pressed === 'introBuild', 12, 16);
+      hit(bx, by, bw, bh, function () {
+        if (Game.App && Game.App.onIntroBuildShelter) Game.App.onIntroBuildShelter();
+      });
+    }
+    if (step === 4) {
+      var gap = 10;
+      var btnW = (W - 40 - gap) / 2;
+      var by2 = H * 0.58;
+      var bh2 = 52;
+      // 视觉对等：同色同尺寸，勿一主一次
+      var bgEq = C.wood;
+      var fgEq = '#FFFFFF';
+      btn(ctx, 20, by2, btnW, bh2, I.BTN_REINFORCE || '加固屋顶', bgEq, fgEq, true, pressed === 'introRe', 12, 13);
+      hit(20, by2, btnW, bh2, function () {
+        if (Game.App && Game.App.onIntroBias) Game.App.onIntroBias('reinforce');
+      });
+      btn(ctx, 20 + btnW + gap, by2, btnW, bh2, I.BTN_FOOD || '先囤椰肉', bgEq, fgEq, true, pressed === 'introFood', 12, 13);
+      hit(20 + btnW + gap, by2, btnW, bh2, function () {
+        if (Game.App && Game.App.onIntroBias) Game.App.onIntroBias('food');
+      });
+      ctx.fillStyle = 'rgba(250,241,221,0.7)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('无对错，只记倾斜', W / 2, by2 + bh2 + 18);
+    }
+  }
+
   function drawGame(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
@@ -478,7 +742,7 @@
     // 顶栏（对应 .topbar）
     ctx.fillStyle = C.sea;
     ctx.fillRect(0, 0, W, 44);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = C.topText || '#FFFFFF';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -498,91 +762,122 @@
     ctx.fillText('第 ' + S.day + ' 天' + seasonText, W - 14, 22);
     // 第二行：天气 + 饱食度（V1.12: 天气由第一行下移至此，给季节让位）
     ctx.font = '10px sans-serif';
-    ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : '#FFFFFF';
+    ctx.fillStyle = fInfo && fInfo.isHungry ? '#FF6B6B' : (C.topText || '#FFFFFF');
     ctx.fillText(weatherText + (foodText ? '  ' + foodText : ''), W - 14, 36);
     hit(W - 90, 0, 90, 44, function () { Game.App.backHome(); });
 
-    // 营地标签（含升级光晕动画）；海洋区蓝色底仅在背景图未加载时兜底
+    // 海洋区蓝色底仅在背景图未加载时兜底（岛面带高度随 layout）
+    var _isl = islandBandLayout(W, H);
     if (!hasBeach) {
       ctx.fillStyle = C.sea;
       ctx.beginPath();
       ctx.moveTo(10, 48);
       ctx.lineTo(W - 10, 48);
-      ctx.lineTo(W - 10, 98);
-      ctx.arc(W / 2, 98, (W - 20) / 2, 0, Math.PI);
-      ctx.lineTo(10, 98);
+      ctx.lineTo(W - 10, _isl.bandY + _isl.bandH);
+      ctx.arc(W / 2, _isl.bandY + _isl.bandH, (W - 20) / 2, 0, Math.PI);
       ctx.closePath();
       ctx.fill();
     }
 
-    // 营地标签（含升级光晕动画）
-    var tagText = Game.App.campTagText();
-    var tw = ctx.measureText(tagText).width + 24;
-    var tx = (W - tw) / 2, ty = 74;
+    // V2.0a / 开场：目标条顶替营地 chip
+    var hideBoard = !!_isl.intro;
+    var tagText = hideBoard && Game.App.introGoalText
+      ? Game.App.introGoalText()
+      : Game.App.campTagText();
+    ctx.font = hideBoard ? '10px sans-serif' : '9px sans-serif';
+    var tw = Math.min(W - 24, ctx.measureText(tagText).width + 16);
+    var tx = (W - tw) / 2, ty = _isl.chipY;
     var scale = 1, glow = 0;
-    if (Game.FX.campUpActive()) {
-      var cp = 1.1 - Game.FX.campUpTime(); // 动画进度
-      if (cp < 0.25) scale = 1 + 0.18 * (cp / 0.25);
-      else if (cp < 0.6) scale = 1.18 - 0.22 * ((cp - 0.25) / 0.35);
-      else scale = 0.96 + 0.04 * ((cp - 0.6) / 0.4);
-      glow = Math.sin(cp * Math.PI) * 18;
+    // 无岛面槽光晕时，标签仍保留轻缩放（非岛面节点建成）
+    var upSid = (Game.FX.campUpStageId && Game.FX.campUpActive()) ? Game.FX.campUpStageId() : 0;
+    var islandBound = upSid && Game.DATA.islandSlotForStage && Game.DATA.islandSlotForStage(upSid);
+    if (Game.FX.campUpActive() && !islandBound) {
+      var cp = 1.1 - Game.FX.campUpTime();
+      if (cp < 0.25) scale = 1 + 0.12 * (cp / 0.25);
+      else if (cp < 0.6) scale = 1.12 - 0.14 * ((cp - 0.25) / 0.35);
+      else scale = 0.98 + 0.02 * ((cp - 0.6) / 0.4);
+      glow = Math.sin(cp * Math.PI) * 10;
     }
     ctx.save();
-    ctx.translate(W / 2, ty + 12);
+    ctx.translate(W / 2, ty + _isl.chipH / 2);
     ctx.scale(scale, scale);
-    ctx.translate(-W / 2, -(ty + 12));
+    ctx.translate(-W / 2, -(ty + _isl.chipH / 2));
     if (glow > 0) {
-      ctx.fillStyle = 'rgba(232,118,58,' + (0.4 * glow / 18) + ')';
-      roundRect(ctx, tx - 6, ty - 6, tw + 12, 30, 14);
+      ctx.fillStyle = 'rgba(232,118,58,' + (0.35 * glow / 10) + ')';
+      roundRect(ctx, tx - 4, ty - 3, tw + 8, _isl.chipH + 6, 10);
       ctx.fill();
     }
     ctx.fillStyle = C.wood;
-    roundRect(ctx, tx, ty, tw, 24, 12);
+    roundRect(ctx, tx, ty, tw, _isl.chipH, 8);
     ctx.fill();
     ctx.fillStyle = C.sand;
-    ctx.font = '11px sans-serif';
+    ctx.font = '9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(tagText, W / 2, ty + 12);
+    ctx.fillText(tagText, W / 2, ty + _isl.chipH / 2);
     ctx.restore();
+
+    // 开场叙事罩先压海滩底，再画岛面建筑（建筑不被罩没）
+    if (hideBoard) drawIntroNarrativeVeil(ctx, W, H);
+    // V2.0a: 岛面已建槽位（胶囊占位）；未建不画；不挡棋盘
+    drawIslandBuildings(ctx, W, H, _isl.bandY, _isl.bandH);
+    if (hideBoard) {
+      drawEmptyHomeGuide(ctx, W, _isl.bandY, _isl.bandH, Date.now() / 1000);
+      drawIntroWreck(ctx, W, H, Date.now() / 1000);
+      drawIntroActions(ctx, W, H, pressed);
+      // 开场整页藏棋盘与常规资源条/采集条；不画半高迷你盘
+      return;
+    }
 
     // 资源条（对应 .resbar：木材/食物/石料 棋盘内计数）
     // V1.9: 统计逻辑本身正确（countChain 每帧实时统计棋盘内该链物品总数）
     // 注意：① 该数字是「链总量」，建造消耗的是具体物品（如浮木×3），以建造页缺口为准；②「食物」=食物物品数，与顶栏饱食度(🍖 x/10)是两套概念
     // 增强：点击资源条 → 跳到建造页对照缺口
+    // V2.0 UI：资源条用手绘 WebP 链顶阶图，与棋盘同一套素材，减少 emoji 混搭
+    var mergeN = Game.App.mergeHintCount ? Game.App.mergeHintCount() : 0;
+    var woodId = Game.App.chainTopId ? Game.App.chainTopId('wood') : 3;
+    var foodId = Game.App.chainTopId ? Game.App.chainTopId('food') : 14;
+    var stoneId = Game.App.chainTopId ? Game.App.chainTopId('stone') : 23;
     var resData = [
-      ['\uD83E\uDEB5 木材', Game.App.countChain('wood'), C.fire],
-      ['\uD83E\uDD65 食物', Game.App.countChain('food'), C.fire],
-      ['\uD83E\uDEA8 石料', Game.App.countChain('stone'), C.fire]
+      ['木材', Game.App.countChain('wood'), C.fire, woodId],
+      ['食物', Game.App.countChain('food'), C.fire, foodId],
+      ['石料', Game.App.countChain('stone'), C.fire, stoneId]
     ];
-    var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = 106;
+    var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = _isl.resY;
     for (var i = 0; i < 3; i++) {
       var rx = 10 + i * (rw + gap);
-      ctx.fillStyle = '#FFFFFF';
+      ctx.globalAlpha = (C._themeId === 'C') ? 0.92 : 1;
+      ctx.fillStyle = C.resBg || '#FFFFFF';
       roundRect(ctx, rx, ry, rw, 34, 8);
       ctx.fill();
-      ctx.strokeStyle = C.wood;
+      ctx.strokeStyle = C.cellStroke || C.wood;
       ctx.lineWidth = 1.5;
       roundRect(ctx, rx, ry, rw, 34, 8);
       ctx.stroke();
+      ctx.globalAlpha = 1;
+      drawItemVisual(ctx, resData[i][3], rx + 4, ry + 3, 28, 28, { showName: false });
       ctx.fillStyle = C.ink;
-      ctx.font = '12px sans-serif';
+      ctx.font = '11px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(resData[i][0], rx + 8, ry + 17);
+      ctx.fillText(resData[i][0], rx + 34, ry + 12);
+      ctx.fillStyle = C.wood;
+      ctx.font = '8px sans-serif';
+      ctx.fillText('链合计', rx + 34, ry + 25);
       ctx.fillStyle = resData[i][2];
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(String(resData[i][1]), rx + rw - 8, ry + 17);
-      // V1.9增强: 点击资源条跳到建造页（快速对照各节点具体缺口）
       hit(rx, ry, rw, 34, (function () { return function () { Game.App.switchTab('camp'); }; })());
     }
 
     // 棋盘面板（对应 .panel）- 改为 4 列，支持上下滚动
-    var py = 148, ph = H - 148 - 118;
+    // V2.0 UI：预留下方目标条空间，避免与棋盘底提示叠字
+    var ACTION_RESERVE = 136;
+    var py = 148, ph = H - 148 - ACTION_RESERVE;
     // 滚动状态：boardScrollY，默认 0，最大值为 (总行数-可视行数) * 行高
     var boardScrollY = Game.boardScrollY || 0;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = C.panelBg || '#FFFFFF';
     roundRect(ctx, 10, py, W - 20, ph, 12);
     ctx.fill();
     // 棋盘区域剪裁：超出部分不绘制
@@ -591,7 +886,7 @@
     roundRect(ctx, 10, py, W - 20, ph, 12);
     ctx.clip();
 
-    ctx.strokeStyle = C.wood;
+    ctx.strokeStyle = C.cellStroke || C.wood;
     ctx.lineWidth = 2;
     roundRect(ctx, 10, py, W - 20, ph, 12);
     ctx.stroke();
@@ -599,10 +894,11 @@
     ctx.fillStyle = C.wood;
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('合成棋盘（3连自动升级）', 20, py + 16);
+    ctx.fillText('\u62D6\u52A8\u4E09\u5408\u4E00\uFF08\u9760\u8FD1\u540C\u7269\u78C1\u5438\uFF09', 20, py + 16);
     ctx.textAlign = 'right';
     var used = Game.App.boardUsed();
-    ctx.fillText(used + '/' + S.space, W - 20, py + 16);
+    var themeName = (Game.App.getThemeInfo && Game.App.getThemeInfo().name) || '';
+    ctx.fillText(used + '/' + S.space + (themeName ? (' · ' + themeName) : ''), W - 20, py + 16);
 
     // 棋盘格子（4 列，支持滚动）
     var cols = 4;
@@ -649,37 +945,57 @@
       ctx.translate(cx + bw2 / 2, cy + bh2 / 2);
       ctx.scale(popScale, popScale);
       ctx.translate(-(cx + bw2 / 2), -(cy + bh2 / 2));
-      if (id) {
-        var it = Game.DATA.ITEMS[id];
-        // 方案一：格底统一为沙色 #F2D5A0，与手绘图投影自然融合
-        ctx.fillStyle = C.sand;
+      var drag = Game.drag;
+      var isDragFrom = drag && drag.from === ci;
+      var isPartner = drag && drag.partners && (drag.partners[0] === ci || drag.partners[1] === ci);
+      var showId = isDragFrom ? 0 : id; // 拖起源格显示空位，浮层另画
+      if (showId) {
+        var it = Game.DATA.ITEMS[showId];
+        ctx.fillStyle = C.cellFill || C.sand;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.fill();
-        ctx.strokeStyle = C.wood;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isPartner ? C.fire : (C.cellStroke || C.wood);
+        ctx.lineWidth = isPartner ? 3 : 1.5;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.stroke();
-        // 物品：优先手绘图，未加载完/失败降级 emoji
-        var _a = Game.assets && Game.assets[id];
-        if (_a && _a.complete && _a.width) {
-          var _pad = bw2 * 0.12;
-          ctx.drawImage(_a, cx + _pad, cy + _pad, bw2 - _pad * 2, bh2 - _pad * 2);
-        } else {
-          ctx.font = (bh2 * 0.6) + 'px sans-serif';
+        if (isPartner) {
+          ctx.fillStyle = 'rgba(232,118,58,0.22)';
+          roundRect(ctx, cx - 2, cy - 2, bw2 + 4, bh2 + 4, 8);
+          ctx.fill();
+        }
+        var useFallbackName = !(Game.App && Game.App.isAssetOk && Game.App.isAssetOk(showId));
+        drawItemVisual(ctx, showId, cx, cy, bw2, bh2, { showName: useFallbackName });
+        // 可合成角标：同 id≥3 → 右上；Lv 左下，避免对角拥挤
+        var same = 0;
+        if (it.next && Game.S) {
+          for (var si = 0; si < Game.S.space; si++) if (Game.S.board[si] === showId) same++;
+        }
+        var showMerge = same >= 3;
+        ctx.font = '7px sans-serif';
+        ctx.fillStyle = C.wood;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('Lv' + it.lv, cx + 3, cy + bh2 - 3);
+        if (showMerge) {
+          ctx.fillStyle = C.fire;
+          ctx.beginPath();
+          ctx.arc(cx + bw2 - 8, cy + 8, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 8px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(it.em, cx + bw2 / 2, cy + bh2 / 2 - 2);
+          ctx.fillText('3', cx + bw2 - 8, cy + 8);
         }
-        ctx.font = '8px sans-serif';
-        ctx.fillStyle = C.wood;
-        ctx.textAlign = 'right';
-        ctx.fillText('Lv' + it.lv, cx + bw2 - 3, cy + bh2 - 3);
       } else {
-        ctx.fillStyle = C.paper;
+        ctx.fillStyle = C.emptyFill || C.paper;
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.fill();
-        ctx.strokeStyle = C.paper3;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = isDragFrom ? C.fire : (C.emptyStroke || C.paper3);
+        ctx.lineWidth = isDragFrom ? 2 : 1.5;
         ctx.setLineDash([4, 3]);
         roundRect(ctx, cx, cy, bw2, bh2, 7);
         ctx.stroke();
@@ -687,18 +1003,48 @@
       }
       ctx.restore();
     }
-    ctx.restore(); // 结束剪裁
-
-    // 滚动提示（当可滚动时在底部显示）
-    if (canScroll) {
-      ctx.fillStyle = 'rgba(139,94,60,0.6)';
+    // V2.0：浮层棋子跟随手指（画在剪裁内，不越出面板太多也无妨）
+    if (Game.drag && Game.drag.id) {
+      var d = Game.drag;
+      var dit = Game.DATA.ITEMS[d.id];
+      var fw = bw2 * 0.92, fh = bh2 * 0.92;
+      var fx = d.x - fw / 2, fy = d.y - fh / 2;
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = C.cellFill || C.sand;
+      roundRect(ctx, fx, fy, fw, fh, 7);
+      ctx.fill();
+      ctx.strokeStyle = (d.partners && d.partners.length >= 2) ? C.fire : (C.cellStroke || C.wood);
+      ctx.lineWidth = 2.5;
+      roundRect(ctx, fx, fy, fw, fh, 7);
+      ctx.stroke();
+      drawItemVisual(ctx, d.id, fx, fy, fw, fh, { showName: false });
+      ctx.restore();
+    }
+    // 空棋盘 / 可三合引导（画在面板剪裁内；底边留空给目标条，避免叠字）
+    if (used === 0 && !(Game.drag && Game.drag.id)) {
+      ctx.fillStyle = C.wood;
+      ctx.globalAlpha = 0.9;
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('棋盘还空着 · 点下方「采集」获取物资', W / 2, py + ph * 0.42);
+      ctx.font = '10px sans-serif';
+      ctx.fillText('三枚相同物品可拖近合成升级', W / 2, py + ph * 0.42 + 18);
+      ctx.globalAlpha = 1;
+    } else if (mergeN > 0 && !(Game.drag && Game.drag.id)) {
+      ctx.fillStyle = C.fire;
       ctx.font = '9px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(boardScrollY > 0 ? '\u25B2 上翻' : (totalRows > visibleRows ? '\u25BC 下翻' : ''), W / 2, py + ph - 6);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u2728 有 ' + mergeN + ' 种可三合：拖近同物后松手', W / 2, py + ph - 22);
     }
+    ctx.restore(); // 结束剪裁
+    // 滚动仅靠右侧滚动条指示，去掉底边「上翻/下翻」文字，避免与目标条叠字
 
     // 操作按钮区：地点菜单 + 采集 + 漂流瓶
     var ay = H - 112;
+
     var zoneW = 76, gapA = 6;
     var restW = W - 20 - zoneW - gapA;
     var gatherW = restW * 0.58, bottleW = restW - gatherW - gapA;
@@ -711,18 +1057,18 @@
     if (animating) gLabel = '\uD83C\uDFA3 采集中...';
     var timerTxt = Game.App.energyTimerText();
     if (timerTxt && !animating) gLabel += ' ' + timerTxt;
-    // V1.15: 目标提示条
+    // V1.15: 目标提示条（画在棋盘底与操作钮之间的预留带，避免叠字）
     if (Game.App.getGoalHint && Game.tab === 'board') {
       var goal = Game.App.getGoalHint();
       ctx.save();
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(74,52,40,0.88)';
-      roundRect(ctx, 10, ay - 22, W - 20, 18, 8);
+      ctx.fillStyle = (C._themeId === 'C') ? 'rgba(30,53,69,0.92)' : 'rgba(74,52,40,0.88)';
+      roundRect(ctx, 10, ay - 24, W - 20, 18, 8);
       ctx.fill();
-      ctx.fillStyle = '#FAF1DD';
-      ctx.fillText(goal.length > 28 ? goal.slice(0, 28) + '\u2026' : goal, 18, ay - 13);
+      ctx.fillStyle = C.topText || '#FAF1DD';
+      ctx.fillText(goal.length > 28 ? goal.slice(0, 28) + '\u2026' : goal, 18, ay - 15);
       ctx.restore();
     }
     // 地点常驻按钮（点开切换，不耗体力）
@@ -795,7 +1141,12 @@
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('\uD83C\uDFD7\uFE0F 建造', W / 2, 18); // V1.11: 原为 🚀（火箭），与「建造」语义不符
+    ctx.fillText('\uD83C\uDFD7\uFE0F 建造', W / 2, 16);
+    if (Game.App.periodBuildTip) {
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = C.fire;
+      ctx.fillText(Game.App.periodBuildTip(), W / 2, 30);
+    }
 
     // V1.4: 显示被封锁的分支
     if (S.lockedTrees && S.lockedTrees.length > 0) {
@@ -807,10 +1158,10 @@
       }).join('、');
       ctx.fillStyle = '#FF6B6B';
       ctx.font = '9px sans-serif';
-      ctx.fillText('\uD83D\uDD12 本周目封锁：' + lockedNames, W / 2, 32);
+      ctx.fillText('\uD83D\uDD12 本周目封锁：' + lockedNames, W / 2, 42);
     }
 
-    var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 48 : 36;
+    var startY = S.lockedTrees && S.lockedTrees.length > 0 ? 54 : 42;
 
     // 遍历所有科技树节点，以列表形式展示（V1.6: 支持滚动）
     // V1.11: 去掉此处原有的 `var y = startY;`（后续在裁剪块内重新声明，属死代码）
@@ -922,22 +1273,35 @@
           ctx.font = '10px sans-serif';
           ctx.fillText('效果：' + node.desc, 20, oy + 34);
 
-          // 资源需求
+          // 资源需求（手绘 WebP 小图标 + 数量，与棋盘统一风格）
           var nx = 20;
           var hasAllRes = true;
-          for (var id in node.need) {
+          var needMap = Game.App.getEffectiveNeed ? Game.App.getEffectiveNeed(node.need) : node.need;
+          for (var id in needMap) {
             var have = Game.App.countItem(+id);
-            var need = node.need[id];
+            var need = needMap[id];
+            var rawNeed = node.need[id];
             var ok = have >= need;
             if (!ok) hasAllRes = false;
-            var label = Game.DATA.ITEMS[id].em + have + '/' + need;
-            var pw = ctx.measureText(label).width + 10;
-            ctx.fillStyle = ok ? C.okGreen : C.paper2;
-            roundRect(ctx, nx, oy + 42, pw, 16, 4);
+            var bias = '';
+            if (rawNeed !== need) bias = (need < rawNeed ? '\u2193' : '\u2191');
+            var label = have + '/' + need + bias;
+            ctx.font = '9px sans-serif';
+            var tw = ctx.measureText(label).width;
+            var pw = 18 + tw + 8;
+            ctx.fillStyle = ok ? C.okGreen : (C.paper2 || '#E8D6B0');
+            roundRect(ctx, nx, oy + 42, pw, 18, 4);
             ctx.fill();
+            ctx.strokeStyle = ok ? (C.leaf || '#6FA860') : (C.emptyStroke || C.paper3);
+            ctx.lineWidth = 1;
+            roundRect(ctx, nx, oy + 42, pw, 18, 4);
+            ctx.stroke();
+            drawItemVisual(ctx, +id, nx + 1, oy + 43, 16, 16, { showName: false });
             ctx.fillStyle = C.ink;
             ctx.font = '9px sans-serif';
-            ctx.fillText(label, nx + 4, oy + 53);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, nx + 18, oy + 51);
             nx += pw + 4;
           }
 
@@ -1509,6 +1873,15 @@
   function render(ctx, W, H, t) {
     Game.hits = [];
     var sc = Game.scene;
+    if (sc === 'sidescroll') {
+      // V2 P0 横版荒岛：自管绘制与 hits
+      if (Game.SideScroll && Game.SideScroll.render) Game.SideScroll.render(ctx, W, H);
+      Game.FX.draw(ctx, W, H);
+      var hitsBeforeModalSs = Game.hits.length;
+      drawModal(ctx, W, H);
+      if (Game.modal) Game.hits = Game.hits.slice(hitsBeforeModalSs);
+      return;
+    }
     if (sc === 'home') {
       drawHome(ctx, W, H, t);
     } else if (sc === 'cg') {
@@ -1518,7 +1891,7 @@
     } else if (sc === 'victory') {
       drawVictory(ctx, W, H, t);
     } else {
-      // game
+      // game（旧棋盘三合）
       if (Game.tab === 'camp') drawCamp(ctx, W, H);
       else if (Game.tab === 'log') drawLog(ctx, W, H);
       else drawGame(ctx, W, H);

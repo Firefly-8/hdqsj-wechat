@@ -53,7 +53,7 @@
 
   /**
    * 播放激励视频
-   * @param type  'energy' | 'bottle' | 'offline'  （奖励类型，回调时区分）
+   * @param type  'energy' | 'bottle' | 'offline' | 'revive'  （奖励类型；revive=横版死亡重生）
    * @param onDone 观看成功回调
    * @param onCancel 取消/失败回调（可选）
    */
