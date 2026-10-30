@@ -10,6 +10,7 @@
   var toastBox = null; // toast 状态
   var dayTrans = null; // 天数过渡状态
   var campUpT = 0;     // 营地标签升级动画计时
+  var campUpStageId = 0; // V2.0a: 刚建成的岛面槽 stageId（光晕绑槽）
 
   var FX = {};
 
@@ -49,11 +50,14 @@
   };
 
   // ---- 营地升级光晕（对应网页 .camp-tag.up：scale 1→1.18→.96→1 + 光晕 1.1s）----
-  FX.campUp = function () {
+  // V2.0a: 可传 stageId，岛面槽光晕绑刚亮的那一槽
+  FX.campUp = function (stageId) {
     campUpT = 1.1;
+    campUpStageId = stageId || 0;
   };
   FX.campUpActive = function () { return campUpT > 0; };
   FX.campUpTime = function () { return campUpT; };
+  FX.campUpStageId = function () { return campUpStageId; };
 
   // V2.0 PR1: 采集动画压到 ≤0.6s（原 V1.6 为 2.4s，手感偏慢）
   var GATHER_DUR = 0.55;
@@ -111,7 +115,10 @@
         if (cb) cb();
       }
     }
-    if (campUpT > 0) campUpT -= dt;
+    if (campUpT > 0) {
+      campUpT -= dt;
+      if (campUpT <= 0) campUpStageId = 0;
+    }
     // V1.5: 采集动画更新
     if (gatherAnimT > 0) {
       gatherAnimT -= dt;

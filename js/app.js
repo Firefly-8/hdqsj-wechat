@@ -66,6 +66,13 @@
     if (s.board.length < s.space) s.board = s.board.concat(new Array(s.space - s.board.length).fill(0));
     if (s.board.length > s.space) s.space = s.board.length;
     if (!Array.isArray(s.stages)) s.stages = [];
+    // V2.0a: stages 保持稳定数字 id；纠偏旧串并去重（不改 key 名）
+    var _st = [];
+    for (var si = 0; si < s.stages.length; si++) {
+      var sid = +s.stages[si];
+      if (sid && _st.indexOf(sid) < 0) _st.push(sid);
+    }
+    s.stages = _st;
     if (typeof s.bottleDate !== 'string') s.bottleDate = new Date().toDateString();
     return s;
   }
@@ -1347,12 +1354,16 @@
     var buildMeta = { name: st.name, em: st.em || '\uD83D\uDD28' };
     var afterBuildFx = function () {
       Game.FX.dayTransition(S.day, function () {
-        Game.FX.campUp();
-        var builtMsg = '\u5EFA\u6210\uFF1A' + st.name + '\uFF01';
+        Game.FX.campUp(stId);
+        var onIsland = D.islandSlotForStage && D.islandSlotForStage(stId);
+        var builtMsg = onIsland
+          ? (st.name + '\u5DF2\u7ACB\u5728\u5C9B\u4E0A')
+          : ('\u5EFA\u6210\uFF1A' + st.name + '\uFF01');
         if (getDayPeriod() === 'night') builtMsg += '\n夜里盖完了——手艺磕绊，却也成了。';
         else if (getDayPeriod() === 'day') builtMsg += '\n白天好干活。';
         Game.FX.toast(builtMsg);
-        Game.FX.sparkle((Game.canvas ? Game.canvas.width : 375) / 2, 86, '#E8763A', 12);
+        var sparkX = onIsland && onIsland.nx != null ? onIsland.nx * 375 : 187.5;
+        Game.FX.sparkle(sparkX, 84, '#E8763A', 12);
       });
     };
     if (Game.FX.buildAnim) Game.FX.buildAnim(buildMeta, afterBuildFx);

@@ -102,6 +102,48 @@
   // 兼容旧版 STAGES（用于 normalizeSave 等）
   var STAGES = TECH_TREES[0].nodes.concat(TECH_TREES[1].nodes).concat(TECH_TREES[2].nodes).concat(TECH_TREES[3].nodes);
 
+  // V2.0a 岛面可见建筑：沿沙滩地平线锚点（非等距横排）
+  // nx/ny 相对岛面带 0–1；rw/rh 为逻辑 hit/绘制 rect（相对 W / 岛带高）；scale 景深 0.85–1
+  // stageIds 可多档同槽升级（只亮最高已建）；img 预留，默认空=程序占位
+  // 避开底图左中窝棚区：庇护所锚在偏中，勿叠双影
+  var ISLAND_SLOTS = [
+    { id: 'fence', stageIds: [101], label: '\u6805\u680F\u56F4\u5899', em: '\uD83E\uDDF1', nx: 0.14, ny: 0.36, scale: 0.88, rw: 0.15, rh: 0.78, img: '' },
+    { id: 'home',  stageIds: [121, 123], label: '\u5E87\u62A4\u6240', em: '\u26FA', nx: 0.48, ny: 0.50, scale: 1.00, rw: 0.17, rh: 0.86, img: '' },
+    { id: 'store', stageIds: [122], label: '\u4ED3\u50A8', em: '\uD83D\uDCE6', nx: 0.70, ny: 0.46, scale: 0.95, rw: 0.14, rh: 0.76, img: '' },
+    { id: 'dock',  stageIds: [125], label: '\u8239\u57A2', em: '\uD83D\uDEA2', nx: 0.88, ny: 0.60, scale: 0.85, rw: 0.13, rh: 0.70, img: '' }
+  ];
+
+  /** 解析槽位当前展示：未建返回 null；同槽多档取 stages 中最高（数组靠后且已建） */
+  function resolveIslandSlot(slot, stages) {
+    if (!slot || !slot.stageIds || !stages) return null;
+    var picked = 0;
+    for (var i = 0; i < slot.stageIds.length; i++) {
+      if (stages.indexOf(slot.stageIds[i]) >= 0) picked = slot.stageIds[i];
+    }
+    if (!picked) return null;
+    var node = null;
+    for (var t = 0; t < TECH_TREES.length && !node; t++) {
+      for (var n = 0; n < TECH_TREES[t].nodes.length; n++) {
+        if (TECH_TREES[t].nodes[n].id === picked) { node = TECH_TREES[t].nodes[n]; break; }
+      }
+    }
+    return {
+      stageId: picked,
+      label: (node && node.name) || slot.label,
+      em: (node && node.em) || slot.em,
+      slot: slot
+    };
+  }
+
+  /** 某科技节点是否挂在岛面槽（建成反馈用） */
+  function islandSlotForStage(stageId) {
+    for (var i = 0; i < ISLAND_SLOTS.length; i++) {
+      if (ISLAND_SLOTS[i].stageIds.indexOf(stageId) >= 0) return ISLAND_SLOTS[i];
+    }
+    return null;
+  }
+
+
   // 体力恢复间隔（demo 用 30s 便于体验；上线前调回 3-5 分钟）
   // V1.15: 上线节奏——体力自然恢复 30s → 3 分钟（README 建议 3–5 分钟）
   var E_INTERVAL = 180000;
@@ -554,6 +596,9 @@
       C._themeId = t.id;
       C._themeName = t.name;
       C._themeLerpU = 1;
+      C._themeFromId = t.id;
+      C._themeToId = t.id;
+      C._islandNightAlpha = ({ B: 0, A: 0.08, C: 0.36 })[t.id] || 0;
       return t;
     }
     if (t.id !== _themeLerp.toId) {
@@ -588,6 +633,15 @@
     C._themeId = t.id;
     C._themeName = t.name;
     C._themeLerpU = u;
+    // V2.0a: 岛面夜罩 alpha 随主题插值（建筑层独立绘制，不吃此罩）
+    var THEME_ISLAND_NIGHT = { B: 0, A: 0.08, C: 0.36 };
+    var fromNight = THEME_ISLAND_NIGHT[_themeLerp.fromId];
+    var toNight = THEME_ISLAND_NIGHT[_themeLerp.toId];
+    if (fromNight == null) fromNight = 0;
+    if (toNight == null) toNight = 0;
+    C._islandNightAlpha = fromNight + (toNight - fromNight) * u;
+    C._themeFromId = _themeLerp.fromId;
+    C._themeToId = _themeLerp.toId;
     return t;
   }
 
@@ -675,6 +729,7 @@
   Game.DATA = {
     C: C, ITEMS: ITEMS, L1: L1, L2_BONUS: L2_BONUS, STAGES: STAGES,
     TECH_TREES: TECH_TREES,
+    ISLAND_SLOTS: ISLAND_SLOTS, resolveIslandSlot: resolveIslandSlot, islandSlotForStage: islandSlotForStage,
     E_INTERVAL: E_INTERVAL, MISS_LINES: MISS_LINES, FULL_LINES: FULL_LINES,
     LOGS: LOGS, DIARY_CHAPTERS: DIARY_CHAPTERS, VICTORY_TEXT: VICTORY_TEXT,
     DT_ICONS: DT_ICONS, DT_SUBS: DT_SUBS, CG_TEXT: CG_TEXT,

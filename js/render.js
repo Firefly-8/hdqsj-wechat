@@ -498,6 +498,92 @@
   }
 
   // ============ 游戏主界面 ============
+
+  // ============ V2.0a 岛面可见建筑 ============
+  // 岛面带：顶栏下沿芯片之下、资源条之上；未建不画；胶囊+emoji 占位
+  function islandBandLayout(W, H) {
+    // 压缩营地标签为顶栏下沿芯片，给岛面腾垂直空间
+    return {
+      chipY: 45, chipH: 16,
+      bandY: 63, bandH: 44,
+      resY: 110
+    };
+  }
+
+  function drawIslandNightVeil(ctx, W, bandY, bandH) {
+    var a = (Game.DATA.C && Game.DATA.C._islandNightAlpha) || 0;
+    if (a <= 0.001) return;
+    ctx.fillStyle = 'rgba(20,40,60,' + a + ')';
+    ctx.fillRect(0, bandY, W, bandH);
+  }
+
+  function islandSlotRect(slot, W, bandY, bandH) {
+    var cx = slot.nx * W;
+    var cy = bandY + slot.ny * bandH;
+    var bw = Math.max(28, W * slot.rw * slot.scale);
+    var bh = Math.max(22, bandH * slot.rh * Math.min(1, slot.scale + 0.05));
+    // 底部贴岛带，略上浮避免裁切
+    var bx = cx - bw / 2;
+    var by = Math.min(bandY + bandH - bh - 1, Math.max(bandY + 1, cy - bh * 0.55));
+    return { x: bx, y: by, w: bw, h: bh, cx: cx, cy: by + bh * 0.45 };
+  }
+
+  function drawIslandSlotVisual(ctx, resolved, rect, glow) {
+    var x = rect.x, y = rect.y, w = rect.w, h = rect.h;
+    var rr = Math.min(h / 2, 14);
+    if (glow > 0) {
+      ctx.fillStyle = 'rgba(232,118,58,' + (0.35 * glow) + ')';
+      roundRect(ctx, x - 5, y - 5, w + 10, h + 10, rr + 4);
+      ctx.fill();
+    }
+    // 固定中性色：不吃主题 tint / 羊皮纸染色
+    ctx.fillStyle = 'rgba(255,248,230,0.82)';
+    roundRect(ctx, x, y, w, h, rr);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(74,52,40,0.42)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, w, h, rr);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#2C2416';
+    ctx.font = Math.floor(h * 0.48) + 'px sans-serif';
+    ctx.fillText(resolved.em, rect.cx, rect.cy - 3);
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = 'rgba(74,52,40,0.85)';
+    var nm = resolved.label.length > 4 ? resolved.label.slice(0, 4) : resolved.label;
+    ctx.fillText(nm, rect.cx, y + h - 7);
+  }
+
+  function drawIslandBuildings(ctx, W, H, bandY, bandH) {
+    var slots = Game.DATA.ISLAND_SLOTS || [];
+    var stages = (Game.S && Game.S.stages) || [];
+    var resolve = Game.DATA.resolveIslandSlot;
+    // 先夜罩（压海滩底），再画建筑（建筑不被罩）
+    drawIslandNightVeil(ctx, W, bandY, bandH);
+    var upId = (Game.FX.campUpActive && Game.FX.campUpActive() && Game.FX.campUpStageId)
+      ? Game.FX.campUpStageId() : 0;
+    var glowAmt = 0;
+    if (upId && Game.FX.campUpActive()) {
+      var cp = 1.1 - Game.FX.campUpTime();
+      glowAmt = Math.sin(Math.min(1, Math.max(0, cp)) * Math.PI);
+    }
+    for (var i = 0; i < slots.length; i++) {
+      var slot = slots[i];
+      var resolved = resolve ? resolve(slot, stages) : null;
+      if (!resolved) continue;
+      var rect = islandSlotRect(slot, W, bandY, bandH);
+      var g = (upId && resolved.stageId === upId) ? glowAmt : 0;
+      // 同槽升级：光晕也认 stageIds 内任一刚建 id
+      if (!g && upId && slot.stageIds.indexOf(upId) >= 0) g = glowAmt;
+      drawIslandSlotVisual(ctx, resolved, rect, g);
+      // 点击进建造页；岛面带在棋盘之上，不抢拖合
+      hit(rect.x, rect.y, rect.w, rect.h, function () {
+        if (Game.App && Game.App.switchTab) Game.App.switchTab('camp');
+      });
+    }
+  }
+
   function drawGame(ctx, W, H) {
     var C = Game.DATA.C;
     var S = Game.S;
@@ -533,49 +619,56 @@
     ctx.fillText(weatherText + (foodText ? '  ' + foodText : ''), W - 14, 36);
     hit(W - 90, 0, 90, 44, function () { Game.App.backHome(); });
 
-    // 营地标签（含升级光晕动画）；海洋区蓝色底仅在背景图未加载时兜底
+    // 海洋区蓝色底仅在背景图未加载时兜底（岛面带高度随 layout）
+    var _isl = islandBandLayout(W, H);
     if (!hasBeach) {
       ctx.fillStyle = C.sea;
       ctx.beginPath();
       ctx.moveTo(10, 48);
       ctx.lineTo(W - 10, 48);
-      ctx.lineTo(W - 10, 98);
-      ctx.arc(W / 2, 98, (W - 20) / 2, 0, Math.PI);
-      ctx.lineTo(10, 98);
+      ctx.lineTo(W - 10, _isl.bandY + _isl.bandH);
+      ctx.arc(W / 2, _isl.bandY + _isl.bandH, (W - 20) / 2, 0, Math.PI);
       ctx.closePath();
       ctx.fill();
     }
 
-    // 营地标签（含升级光晕动画）
+    // V2.0a: 营地标签缩短为顶栏下沿芯片，给岛面腾垂直空间
     var tagText = Game.App.campTagText();
-    var tw = ctx.measureText(tagText).width + 24;
-    var tx = (W - tw) / 2, ty = 74;
+    ctx.font = '9px sans-serif';
+    var tw = Math.min(W - 24, ctx.measureText(tagText).width + 16);
+    var tx = (W - tw) / 2, ty = _isl.chipY;
     var scale = 1, glow = 0;
-    if (Game.FX.campUpActive()) {
-      var cp = 1.1 - Game.FX.campUpTime(); // 动画进度
-      if (cp < 0.25) scale = 1 + 0.18 * (cp / 0.25);
-      else if (cp < 0.6) scale = 1.18 - 0.22 * ((cp - 0.25) / 0.35);
-      else scale = 0.96 + 0.04 * ((cp - 0.6) / 0.4);
-      glow = Math.sin(cp * Math.PI) * 18;
+    // 无岛面槽光晕时，标签仍保留轻缩放（非岛面节点建成）
+    var upSid = (Game.FX.campUpStageId && Game.FX.campUpActive()) ? Game.FX.campUpStageId() : 0;
+    var islandBound = upSid && Game.DATA.islandSlotForStage && Game.DATA.islandSlotForStage(upSid);
+    if (Game.FX.campUpActive() && !islandBound) {
+      var cp = 1.1 - Game.FX.campUpTime();
+      if (cp < 0.25) scale = 1 + 0.12 * (cp / 0.25);
+      else if (cp < 0.6) scale = 1.12 - 0.14 * ((cp - 0.25) / 0.35);
+      else scale = 0.98 + 0.02 * ((cp - 0.6) / 0.4);
+      glow = Math.sin(cp * Math.PI) * 10;
     }
     ctx.save();
-    ctx.translate(W / 2, ty + 12);
+    ctx.translate(W / 2, ty + _isl.chipH / 2);
     ctx.scale(scale, scale);
-    ctx.translate(-W / 2, -(ty + 12));
+    ctx.translate(-W / 2, -(ty + _isl.chipH / 2));
     if (glow > 0) {
-      ctx.fillStyle = 'rgba(232,118,58,' + (0.4 * glow / 18) + ')';
-      roundRect(ctx, tx - 6, ty - 6, tw + 12, 30, 14);
+      ctx.fillStyle = 'rgba(232,118,58,' + (0.35 * glow / 10) + ')';
+      roundRect(ctx, tx - 4, ty - 3, tw + 8, _isl.chipH + 6, 10);
       ctx.fill();
     }
     ctx.fillStyle = C.wood;
-    roundRect(ctx, tx, ty, tw, 24, 12);
+    roundRect(ctx, tx, ty, tw, _isl.chipH, 8);
     ctx.fill();
     ctx.fillStyle = C.sand;
-    ctx.font = '11px sans-serif';
+    ctx.font = '9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(tagText, W / 2, ty + 12);
+    ctx.fillText(tagText, W / 2, ty + _isl.chipH / 2);
     ctx.restore();
+
+    // V2.0a: 岛面已建槽位（胶囊占位）；未建不画；不挡棋盘
+    drawIslandBuildings(ctx, W, H, _isl.bandY, _isl.bandH);
 
     // 资源条（对应 .resbar：木材/食物/石料 棋盘内计数）
     // V1.9: 统计逻辑本身正确（countChain 每帧实时统计棋盘内该链物品总数）
@@ -591,7 +684,7 @@
       ['食物', Game.App.countChain('food'), C.fire, foodId],
       ['石料', Game.App.countChain('stone'), C.fire, stoneId]
     ];
-    var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = 106;
+    var gap = 6, rw = (W - 20 - gap * 2) / 3, ry = _isl.resY;
     for (var i = 0; i < 3; i++) {
       var rx = 10 + i * (rw + gap);
       ctx.globalAlpha = (C._themeId === 'C') ? 0.92 : 1;
