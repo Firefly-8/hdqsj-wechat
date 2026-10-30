@@ -687,7 +687,8 @@
     ctx.fillText('材料 ' + w + '/3', cx, cy + bh / 2 + 30);
     ctx.restore();
     if (step <= 2 && w < 3) {
-      hit(cx - bw / 2 - 8, cy - bh / 2 - 12, bw + 16, bh + 50, function () {
+      // 加大热区：含标签「船骸/材料」，避免点不准
+      hit(cx - bw / 2 - 24, cy - bh / 2 - 24, bw + 48, bh + 80, function () {
         if (Game.App && Game.App.onIntroWreckTap) Game.App.onIntroWreckTap();
       });
     }

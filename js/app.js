@@ -2066,7 +2066,8 @@
     }
     var py = 148, ph = H - 148 - 118;
     var inScroll = false;
-    if (Game.scene === 'game' && Game.tab === 'board' && p.x >= 10 && p.x <= W - 10 && p.y >= py && p.y <= py + ph) {
+    // 开场藏棋盘时禁止把中屏当成棋盘滚动区，否则吞掉船骸/搭起来命中
+    if (Game.scene === 'game' && Game.tab === 'board' && !introBoardHidden() && p.x >= 10 && p.x <= W - 10 && p.y >= py && p.y <= py + ph) {
       scrollTouchStartY = p.y;
       scrollTouchStartScrollY = Game.boardScrollY || 0;
       inScroll = true;
